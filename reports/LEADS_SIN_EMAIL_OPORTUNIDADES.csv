@@ -1,0 +1,258 @@
+prioridad,fecha_chat,dias_transcurridos,tipo_cliente,productos_solicitados,intenciones,resumen_visitante,num_mensajes
+🔴 MÁXIMA,2026-02-08 00:09:02,1,Comprador de Volumen,Pisos/Loseta,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Loseta de porcelanato,6
+🔴 MÁXIMA,2026-02-07 23:24:31,1,Comprador de Volumen,Ferretería,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Jaladera para mueble,5
+🔴 MÁXIMA,2026-02-07 22:12:11,1,Prospecto General,"Cemento/Concreto, Herramientas, Plomería","busca_producto, precio, problema_sitio",Tengo problemas con el sitio | Quiero saber el precio de una llave mezcladora marca rugo,8
+🔴 MÁXIMA,2026-02-04 15:59:37,4,Mayorista/Distribuidor,"Electricidad, Madera, Plomería","busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Tablero 2x100 completo con tubo mufa cableado y el poste metálico para poner el tablero | Por este medio,8
+🔴 MÁXIMA,2026-01-26 23:27:38,13,Comprador de Volumen,Electricidad,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Nadamás quería saber precio de boilers 110 electrico | Por aquí mismo no se puede,8
+🔴 MÁXIMA,2026-01-19 15:32:59,20,Mayorista/Distribuidor,"Cemento/Concreto, Pisos/Loseta","busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Me puede cotizar 7 sacos de piso sobre piso el más económico | Y en cuantos kg maneja los sacos de cemento? Y sus precios? | Me están pidiendo 5 de 50 kg,10
+🟠 ALTA,2026-02-07 22:00:51,1,Prospecto General,No especificado,"busca_producto, problema_sitio",Tengo problemas con el sitio | Quiero un saco de semenquin reparador de femento aqqui en hermosillo donde lo encuentro,8
+🟠 ALTA,2026-02-07 20:59:35,1,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-07 17:50:26,1,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-07 17:21:00,1,Prospecto General,No especificado,"problema_sitio, ubicacion",Tengo problemas con el sitio | Sucursal en tijuana,8
+🟠 ALTA,2026-02-07 08:11:11,1,Profesional en Formación,No especificado,"problema_sitio, talleres_clinicas",Tengo problemas con el sitio | Recursos humanos trabaja los sabados,8
+🟠 ALTA,2026-02-07 08:10:20,1,Profesional en Formación,No especificado,"problema_sitio, talleres_clinicas",Tengo problemas con el sitio | Quería saber si recursos humanos trabajo los sabados,8
+🟠 ALTA,2026-02-06 21:28:01,2,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-06 04:50:13,2,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-06 00:49:52,3,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-05 17:22:14,3,Cliente con Facturación,No especificado,"busca_producto, factura",Quiero facturar,7
+🟠 ALTA,2026-02-04 22:31:40,4,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-04 22:00:54,4,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,4
+🟠 ALTA,2026-02-04 21:38:31,4,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Sujetadores para caveseras de cama,6
+🟠 ALTA,2026-02-04 21:36:40,4,Cliente con Facturación,No especificado,"busca_producto, factura",Quiero facturar,8
+🟠 ALTA,2026-02-04 21:00:17,4,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-04 20:03:39,4,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-04 19:39:48,4,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟠 ALTA,2026-02-04 18:47:22,4,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-04 18:04:46,4,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Buenos dias cuanto sale la caja de redimix,7
+🟠 ALTA,2026-02-04 12:58:24,4,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra. Me cotiza un rollo de pua,3
+🟠 ALTA,2026-02-04 05:05:26,4,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-03 21:15:10,5,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-03 00:08:50,6,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,3
+🟠 ALTA,2026-02-02 22:27:01,6,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-02 21:40:25,6,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-02 20:50:28,6,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-02 19:20:45,6,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-02 16:00:27,6,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,4
+🟠 ALTA,2026-02-01 22:47:42,7,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-02-01 22:28:42,7,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟠 ALTA,2026-02-01 21:40:01,7,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,3
+🟠 ALTA,2026-02-01 18:36:04,7,Contratista/Constructor,No especificado,"busca_producto, contratista, problema_sitio","Quiero ayuda/consejo para mi obra | Tengo problemas con el sitio | QUISIERA UNA HOJA DE DATOS DE SEGURIDAD UN PRODUCTO QUE MANEJAS ZAHORI EMULFIBER, ME LA PUEDES COMPARTIR",13
+🟠 ALTA,2026-02-01 16:26:10,7,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟠 ALTA,2026-01-31 16:29:52,8,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Ptr,6
+🟠 ALTA,2026-01-30 23:20:21,9,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,5
+🟠 ALTA,2026-01-30 20:47:42,9,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,5
+🟠 ALTA,2026-01-30 00:40:01,10,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Cinchos | pamial05@gmail. Com,9
+🟠 ALTA,2026-01-29 03:24:36,11,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Cal | Costal de cal,8
+🟠 ALTA,2026-01-28 00:38:25,12,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,5
+🟠 ALTA,2026-01-28 00:23:58,12,Comprador de Volumen,Herramientas,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | herramienta,7
+🟠 ALTA,2026-01-27 22:02:58,12,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Quiero 8 ptr de 4x4 calibre 14 | Y saber si hay descuento por comprar 8 piezas,8
+🟠 ALTA,2026-01-27 01:07:55,13,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Tubular 4x4 calibre catorce de 20 pies | 11 piezas,6
+🟠 ALTA,2026-01-26 20:33:52,13,Mayorista/Distribuidor,"Herramientas, Plomería","busca_producto, cotizacion_mayoreo","Necesito una cotización de mayoreo | Tubería de PVC unos 10 tubos y 3 conectores macho y una L para pa llave nariz,5 coples",5
+🟠 ALTA,2026-01-26 20:15:49,13,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,4
+🟠 ALTA,2026-01-26 17:47:44,13,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,5
+🟠 ALTA,2026-01-26 05:57:33,13,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,4
+🟠 ALTA,2026-01-25 20:55:09,14,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,8
+🟠 ALTA,2026-01-23 02:42:15,17,Comprador de Volumen,Electricidad,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | 8 metros de cableado 14/2 | evr_1230@ hotmail.com,9
+🟠 ALTA,2026-01-22 17:18:19,17,Comprador de Volumen,Madera,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Cuatro hojas de triplay 3/4,7
+🟠 ALTA,2026-01-22 17:04:53,17,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | XV precio de a/c para casa mini esplit,6
+🟠 ALTA,2026-01-20 00:36:58,20,Comprador de Volumen,Madera,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Un rollo de maya 40 estacas de madera 6 varrotes de 2x4x10 | No tengo coreeo | Por aqui no se puede,10
+🟠 ALTA,2026-01-14 02:06:19,26,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Me podría dar precio de loceta 45/45 | O no tengo correo,8
+🟠 ALTA,2026-01-13 21:20:05,26,Comprador de Volumen,Impermeabilizante,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Me interesa asfalto en frío en que Presio lo tiene y q marcas | No tengo ala mano en correo de la empresa,8
+🟠 ALTA,2026-01-13 14:31:11,26,Comprador de Volumen,Cemento/Concreto,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Ocupo el precio de cemento | Para pizo,8
+🟠 ALTA,2026-01-12 19:36:00,27,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | motor para coler 1/3 lo tendras en tienda de lazaro cardenas | ?? | y que medida es la barra | ?? | lo tienes en lazaro cardenas,15
+🟠 ALTA,2026-01-11 19:40:14,28,Mayorista/Distribuidor,"Cemento/Concreto, Plomería, Varilla/Acero","busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | 2 rollos de Maya soldada | 80 tacos de cemento de 25 kilos | 10 metros de alambre recocido | 6 metros de tubo de 3 de abc | 2 codos de 45 de 3 pulgadas,19
+🟠 ALTA,2025-12-29 22:39:10,41,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Qué precio tiene el tripay de pedatillo de media | Gracias por la información,8
+🟠 ALTA,2025-12-23 08:26:04,47,Comprador de Volumen,Varilla/Acero,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Precio de  4 metros de malla galvanizada | Precio de malla galvanizada,8
+🟠 ALTA,2025-12-19 23:32:59,51,Comprador de Volumen,Madera,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | elprecio de la hja de triplay cero cara de 3 cuartos | no tengo correo,9
+🟠 ALTA,2025-12-10 23:44:52,60,Mayorista/Distribuidor,"Electricidad, Ferretería, Plomería, Varilla/Acero","busca_producto, cotizacion_mayoreo","Necesito una cotización de mayoreo | -1 tramo de unicanal alto cal 14-10 abrazaderas 3/4 para unicanal _10 ' de ángulo de 1""1/2 x1/8 -4 anclas expancivas de 3/8 x 2""-5 ' de solera de 1""1/4 x 1/8 | -Par de mangueras metálicas para suministro y descarga de agua ( de 3/4 x 3')-2 válvulas de paso  de 3/4 (latón)-2 niples de 3/4 x 4"" galvanizado -1 rollo de teflón -10 tramos de tubo steel de 3/3 pared gruesa-6 registros ""LB"" de 3/4-2 conectores de 3/4 para tubo pared gruesa -1 centro de carga  de 2 circuitos marca scuare D QO  para exterior-1 interruptor termomagnético  220v  40 amp scuare D QO -2 m de flexible líquid tight  de 3/4_2 conectores curbos para liquid tight 3/4_70 m de cable eléctrico  #10 color negro _35 m de cable eléctrico #12 color verde",9
+🟠 ALTA,2025-12-06 18:29:25,64,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Necesito una cotización de mayoreo | precio caja de redimix grande,9
+🟠 ALTA,2025-12-03 20:44:16,67,Contratista/Constructor,"Pisos/Loseta, Varilla/Acero","busca_producto, contratista, precio","Quiero ayuda/consejo para mi obra | Calificación: 
+Una pregunta sobre un precio de la malla para echar un piso",6
+🟠 ALTA,2025-11-26 02:44:04,75,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Cuanto esta el barrotes 2×4 de 8 pies | Ocupo ese precio,8
+🟠 ALTA,2025-11-24 21:34:24,76,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio, ubicacion","Necesito una cotización de mayoreo | Son 5 cubetas para impermeabilizar | SKU: 24201 | Ese es el Sku del que necesito las cubetas, quería saber si por ser 5 hay precio, y si se pueden recoger en sucursal Navarrete",10
+🟠 ALTA,2025-11-20 04:15:17,80,Contratista/Constructor,No especificado,"busca_producto, contratista, cotizacion_mayoreo, envio",Necesito una cotización de mayoreo | Te cobran llevar la compra a domicilio,6
+🟠 ALTA,2025-11-16 23:37:02,84,Comprador de Volumen,Electricidad,"busca_producto, cotizacion_mayoreo, precio","Necesito una cotización de mayoreo | Cuanto vale el metro de cable de uso rudo 4x3,307mm2 | Uso rudo de 4cables dentro calibre 12 precio | Su madre",10
+🟠 ALTA,2025-11-06 02:22:51,95,Mayorista/Distribuidor,"Varilla/Acero, Vigueta/Estructura","busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | 205 bloks de 12x20x4020 sementos12 varillas de 3/8x124 armex5 semenbon | Por este medio,8
+🟠 ALTA,2025-11-03 17:57:08,97,Comprador de Volumen,Pisos/Loseta,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Precios de loceta de piso lorelia gris de 36x36,6
+🟠 ALTA,2025-10-31 18:53:14,100,Comprador de Volumen,Cemento/Concreto,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Precio cemento gallo 50 kilos,6
+🟠 ALTA,2025-10-30 04:31:37,101,Comprador de Volumen,Cemento/Concreto,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Precio de cemento gris,6
+🟠 ALTA,2025-10-30 02:17:24,102,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Precio de hoja de yeso | No tengo correo,8
+🟠 ALTA,2025-10-29 20:46:09,102,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | El precio de la maya para gallinero que precio tiene el rollo | No tengo correo,8
+🟠 ALTA,2025-10-23 22:26:44,108,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Nada más el precio de un barrote de 2x12x12 de pino | Aquí por el Whatsapp,8
+🟠 ALTA,2025-10-21 04:12:35,110,Comprador de Volumen,Arena/Grava,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Precio de metro y medio de grava | Puede mandarlo a mi teléfono | No me lo se,10
+🟡 MEDIA,2026-02-08 19:07:58,0,Prospecto General,No especificado,problema_sitio,Tengo problemas con el sitio,6
+🟡 MEDIA,2026-02-08 01:00:14,1,Profesional en Formación,No especificado,talleres_clinicas,Me interesan los talleres gratuitos | Claro que sí!,7
+🟡 MEDIA,2026-02-07 02:33:51,2,Prospecto General,No especificado,problema_sitio,Tengo problemas con el sitio,6
+🟡 MEDIA,2026-02-06 18:35:31,2,Prospecto General,No especificado,problema_sitio,Tengo problemas con el sitio,7
+🟡 MEDIA,2026-02-05 20:18:09,3,Prospecto General,No especificado,problema_sitio,Tengo problemas con el sitio,7
+🟡 MEDIA,2026-02-05 03:02:10,4,Prospecto General,No especificado,"precio, problema_sitio, solo_viendo",Solo estoy viendo | Tengo problemas con el sitio | El precio de la cubeta de 4 kilos de chutama en cuanto está? | El galón de chutama en cuanto esta,16
+🟡 MEDIA,2026-02-04 22:57:59,4,Profesional en Formación,No especificado,talleres_clinicas,Me interesan los talleres gratuitos | Claro que sí!,7
+🟡 MEDIA,2026-02-01 02:47:00,8,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-31 22:47:55,8,Cliente con Facturación,No especificado,"busca_producto, factura",Quiero facturar,7
+🟡 MEDIA,2026-01-31 22:29:37,8,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-31 04:17:07,8,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, solo_viendo",Solo estoy viendo | Necesito una cotización de mayoreo,12
+🟡 MEDIA,2026-01-31 01:12:05,9,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-30 23:29:19,9,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-30 22:24:31,9,Particular/Remodelación,No especificado,"busca_producto, problema_sitio",Tengo problemas con el sitio | Tienen harás para taza de baño,8
+🟡 MEDIA,2026-01-30 22:05:32,9,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-30 03:41:58,10,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-29 22:21:22,10,Cliente con Facturación,No especificado,"busca_producto, factura",Quiero facturar,8
+🟡 MEDIA,2026-01-29 20:33:24,10,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-29 19:44:44,10,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-29 18:49:03,10,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-29 16:53:06,10,Cliente con Facturación,No especificado,"busca_producto, factura",Quiero facturar,8
+🟡 MEDIA,2026-01-29 16:38:21,10,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-29 00:29:59,11,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-28 23:53:43,11,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-28 23:41:36,11,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-28 22:33:07,11,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-28 01:20:24,12,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, solo_viendo",Solo estoy viendo | Necesito una cotización de mayoreo | Puedo comprar en linea y pasar por el?,13
+🟡 MEDIA,2026-01-28 01:05:41,12,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-27 22:48:30,12,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-27 19:50:12,12,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-27 05:32:52,12,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-26 04:26:28,13,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-26 02:00:27,14,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-25 22:31:37,14,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-25 00:45:42,15,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-25 00:10:24,15,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-24 18:59:48,15,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,5
+🟡 MEDIA,2026-01-23 02:05:53,17,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,5
+🟡 MEDIA,2026-01-22 21:41:07,17,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-22 17:47:07,17,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-22 01:48:22,18,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-21 23:41:05,18,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,4
+🟡 MEDIA,2026-01-21 21:49:52,18,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Foam de 2 pulgadas hoja,6
+🟡 MEDIA,2026-01-21 19:28:33,18,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-21 18:59:00,18,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,4
+🟡 MEDIA,2026-01-21 17:02:01,18,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-21 07:50:17,18,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-20 23:04:05,19,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-20 21:49:53,19,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-20 21:49:31,19,Empresa,Pintura,"precio, problema_sitio",Tengo problemas con el sitio | Precio de la pintura spray,8
+🟡 MEDIA,2026-01-20 20:53:54,19,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-20 15:28:11,19,Prospecto General,Pisos/Loseta,"precio, problema_sitio",Tengo problemas con el sitio | Precio de nivelador de loseta,8
+🟡 MEDIA,2026-01-20 15:19:14,19,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-20 15:01:45,19,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-20 01:31:49,20,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-19 23:13:57,20,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-19 20:49:32,20,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,5
+🟡 MEDIA,2026-01-19 19:00:23,20,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-19 14:26:02,20,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-18 22:26:56,21,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-18 20:12:37,21,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-18 17:54:21,21,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,5
+🟡 MEDIA,2026-01-18 05:35:43,21,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | 39 barrote de 2x4 de 12 pies y 39 barrotes de 2x4 de 14 pies,6
+🟡 MEDIA,2026-01-18 03:27:11,22,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-17 22:23:45,22,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-17 21:33:31,22,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-17 21:11:31,22,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-17 16:07:17,22,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-17 04:51:24,22,Contratista/Constructor,Arena/Grava,"busca_producto, contratista",Quiero ayuda/consejo para mi obraeste carton arenado rojo #90 necesito antorcha para pegarlo ?,5
+🟡 MEDIA,2026-01-17 04:04:16,22,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,4
+🟡 MEDIA,2026-01-16 23:15:33,23,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra | Calificación:,5
+🟡 MEDIA,2026-01-16 15:03:23,23,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-16 03:20:09,24,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-16 03:08:21,24,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-16 01:22:59,24,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-15 23:16:15,24,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-15 18:49:09,24,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-14 22:08:15,25,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,4
+🟡 MEDIA,2026-01-14 18:38:41,25,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,5
+🟡 MEDIA,2026-01-14 15:34:49,25,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-14 14:41:29,25,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-14 03:24:06,26,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-13 21:10:10,26,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-13 16:39:55,26,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | cotizacion,6
+🟡 MEDIA,2026-01-13 16:32:13,26,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-13 02:10:40,27,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,5
+🟡 MEDIA,2026-01-12 23:38:22,27,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-12 20:26:52,27,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-12 19:30:45,27,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-12 05:04:06,27,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Lamina de de calibre 26,7
+🟡 MEDIA,2026-01-11 20:10:31,28,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-11 19:18:45,28,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-11 07:36:33,28,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,4
+🟡 MEDIA,2026-01-11 06:26:10,28,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-11 05:51:27,28,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-11 00:32:41,29,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-10 20:38:51,29,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,4
+🟡 MEDIA,2026-01-10 20:03:36,29,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-10 17:14:43,29,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-10 15:28:25,29,Prospecto General,Plomería,"busca_producto, problema_sitio",Tengo problemas con el sitio | Busco tubo de 4 pulgadas pvc,8
+🟡 MEDIA,2026-01-10 00:48:53,30,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,5
+🟡 MEDIA,2026-01-09 20:08:22,30,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-09 19:58:08,30,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-09 05:43:20,30,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-09 04:50:00,30,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,3
+🟡 MEDIA,2026-01-07 23:14:54,32,Comprador de Volumen,Cemento/Concreto,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | 200 SACOS DE CEMENTO | POR ESTE MEDIO,8
+🟡 MEDIA,2026-01-07 20:59:23,32,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Hoja de durock | Número donde pueda marcar,8
+🟡 MEDIA,2026-01-07 20:39:18,32,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Buen día de esto,5
+🟡 MEDIA,2026-01-06 02:51:40,34,Comprador de Volumen,Ferretería,"busca_producto, cotizacion_mayoreo, problema_sitio",Necesito una cotización de mayoreo | bisagra | tengo la imagen | pero  no puedo enviarla por aquí,9
+🟡 MEDIA,2025-12-30 01:07:07,41,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | El precio de un escusado,6
+🟡 MEDIA,2025-12-29 20:36:47,41,Comprador de Volumen,Cemento/Concreto,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Cemento,5
+🟡 MEDIA,2025-12-26 22:51:33,44,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Barrotes,6
+🟡 MEDIA,2025-12-24 01:42:18,47,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Contrupanel,7
+🟡 MEDIA,2025-12-20 08:12:39,50,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Lozeta de 60 x 60,6
+🟡 MEDIA,2025-12-19 18:02:26,51,Comprador de Volumen,Cemento/Concreto,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Cemento,6
+🟡 MEDIA,2025-12-19 00:13:52,52,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Costó de caja electrónica,6
+🟡 MEDIA,2025-12-18 21:19:57,52,Comprador de Volumen,Plomería,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | 88 pies de tubería de 3/4 de cpvc | Me lo puede cotizar,6
+🟡 MEDIA,2025-12-17 22:57:41,53,Comprador de Volumen,Plomería,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Tubo steel de 1/2 pulgada | 3 piezas | Jorgevazquez8790@ Gmail. Com,10
+🟡 MEDIA,2025-12-17 12:49:21,53,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,8
+🟡 MEDIA,2025-12-15 19:06:29,55,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Necesito unos estantes,6
+🟡 MEDIA,2025-12-12 19:21:17,58,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, envio",Necesito una cotización de mayoreo | HOLA | SOLO PREGUNTAR SI HACEN ENVIOS A TIJUANA | MARY,10
+🟡 MEDIA,2025-12-11 23:41:58,59,Contratista/Constructor,No especificado,"busca_producto, contratista, cotizacion_mayoreo, solo_viendo",Quiero ayuda/consejo para mi obra | Solo estoy viendo | Quiero ayuda/consejo para mi obra | Necesito una cotización de mayoreo | Necesito una cotización de mayoreo | Necesito una cotización de mayoreo,18
+🟡 MEDIA,2025-12-10 23:44:02,60,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,5
+🟡 MEDIA,2025-12-09 05:15:15,61,Comprador de Volumen,Cemento/Concreto,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Cemento,6
+🟡 MEDIA,2025-12-07 23:22:20,63,Mayorista/Distribuidor,"Cemento/Concreto, Varilla/Acero","busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Malla para concreto | Codo,7
+🟡 MEDIA,2025-12-04 19:10:38,66,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | me puedes enviar esa cotizacion al correo | me puedes enviar esa cotización al correo,8
+🟡 MEDIA,2025-12-04 04:50:49,66,Comprador de Volumen,Cemento/Concreto,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Cemento,6
+🟡 MEDIA,2025-12-04 00:53:08,67,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | cubeta de imperbilisante precio,6
+🟡 MEDIA,2025-12-02 04:10:58,68,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,5
+🟡 MEDIA,2025-12-02 00:10:34,69,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,5
+🟡 MEDIA,2025-12-01 21:09:03,69,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Precio de la hoja de from de 2 pulgadas,6
+🟡 MEDIA,2025-11-30 01:28:57,71,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | hola tienes promocion en impac 5000,7
+🟡 MEDIA,2025-11-29 18:02:40,71,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Mini split 2 ton | Frikko,7
+🟡 MEDIA,2025-11-29 15:33:36,71,Comprador de Volumen,Cemento/Concreto,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Cemento emplaste,7
+🟡 MEDIA,2025-11-29 15:09:13,71,Comprador de Volumen,Madera,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Busco poste de 8' 3⅝ | Por aquí,8
+🟡 MEDIA,2025-11-28 21:14:55,72,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Buenas tardes venden adhesivo crest blanco?,6
+🟡 MEDIA,2025-11-25 19:52:19,75,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | 260 bloque de 5 y 20 medios,6
+🟡 MEDIA,2025-11-24 21:41:19,76,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | varios productos,6
+🟡 MEDIA,2025-11-21 18:35:52,79,Mayorista/Distribuidor,"Cemento/Concreto, Varilla/Acero","busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | 400blok 33 varillas numero3 35 sacos de cemento,6
+🟡 MEDIA,2025-11-21 00:25:41,80,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Fotos de locetas económicas,6
+🟡 MEDIA,2025-11-20 18:40:12,80,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,5
+🟡 MEDIA,2025-11-20 00:14:14,81,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Tienen algún paquete de bloques,5
+🟡 MEDIA,2025-11-19 23:16:29,81,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio, solo_viendo",Solo estoy viendo | Necesito una cotización de mayoreo | Cuánto vale el saco de marmolina,12
+🟡 MEDIA,2025-11-19 20:58:21,81,Contratista/Constructor,Arena/Grava,"busca_producto, contratista, problema_sitio","quiero saber si tienen sacos de arena | Quiero ayuda/consejo para mi obra | Tengo problemas con el sitio | tienen sacos de arena? | Calificación: 
+pesimo servicio",21
+🟡 MEDIA,2025-11-18 17:49:37,82,Contratista/Constructor,No especificado,"busca_producto, contratista",Quiero ayuda/consejo para mi obra,8
+🟡 MEDIA,2025-11-18 15:23:42,82,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Si | Me puedes dar teléfono en Mexicali,9
+🟡 MEDIA,2025-11-17 16:45:32,83,Comprador de Volumen,Madera,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | 7 hojas de yeso de 1/27 postes de 3 5/82 canaletas de 3 5/8 calibre 25 | ??,7
+🟡 MEDIA,2025-11-17 16:41:05,83,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Meses sin intereses,6
+🟡 MEDIA,2025-11-16 05:18:35,84,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | kit de instalacion para wc,7
+🟡 MEDIA,2025-11-16 02:27:55,85,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Paquetes de bloque | Por aqui,8
+🟡 MEDIA,2025-11-15 22:34:47,85,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Cotización barda 7 mtros,6
+🟡 MEDIA,2025-11-15 21:00:41,85,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Lámina acanalada c-26 de 20' | 11 laminas de 20' y 11 laminas de 14',9
+🟡 MEDIA,2025-11-15 04:57:16,85,Comprador de Volumen,Pisos/Loseta,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Losetas de patio | Puede mandar fotos de losetas,8
+🟡 MEDIA,2025-11-14 18:31:24,86,Prospecto General,Cemento/Concreto,"busca_producto, precio, problema_sitio",Tengo problemas con el sitio | Quiero saber el precio de cemento,8
+🟡 MEDIA,2025-11-14 17:55:15,86,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,5
+🟡 MEDIA,2025-11-14 17:05:44,86,Prospecto General,"Herramientas, Plomería","busca_producto, precio, problema_sitio",Tengo problemas con el sitio | Necesito precio de llave para fregadero,8
+🟡 MEDIA,2025-11-13 23:21:12,87,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Hola b tardes | Quiero saber si ustdess manejan. Guarda polvo para puertas,8
+🟡 MEDIA,2025-11-13 16:42:35,87,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Ok una soldadora que precio tiene,6
+🟡 MEDIA,2025-11-12 01:59:13,89,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Plafon,6
+🟡 MEDIA,2025-11-11 21:16:49,89,Comprador de Volumen,Herramientas,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Nesesito saber presio de rotomartillo Hilt t2 | Puede ser por war sap,8
+🟡 MEDIA,2025-11-11 18:20:09,89,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Precio de blok,6
+🟡 MEDIA,2025-11-11 17:31:31,89,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Permitame | Notiene wap,8
+🟡 MEDIA,2025-11-08 05:13:37,92,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Tapas de PVC de 6 pulgadas,6
+🟡 MEDIA,2025-11-07 14:25:32,93,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Material para construir una barda de 4  a 5 metros,6
+🟡 MEDIA,2025-11-06 00:39:41,95,Comprador de Volumen,Pintura,"busca_producto, cotizacion_mayoreo","Necesito una cotización de mayoreo | Buen día | Tienes rodillo con maneral de 3"" | No tengo correo | Me vas ayudar | Para que te ponen si no sirves",14
+🟡 MEDIA,2025-11-04 16:32:35,96,Comprador de Volumen,Electricidad,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Pegamento de contacto | Cuánto es lo mínimo que debo comprar | Envíame la información vía WhatsApp | 9993683981,13
+🟡 MEDIA,2025-11-04 03:31:43,97,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Nesesito un dado para vástago de regadera,5
+🟡 MEDIA,2025-11-03 19:26:02,97,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | TERMÓMETRO PARA MEDICION TEMPERATURA DEL SUELO,6
+🟡 MEDIA,2025-10-31 20:39:15,100,Comprador de Volumen,Cemento/Concreto,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | en cuanto anda el block | ?,8
+🟡 MEDIA,2025-10-30 00:47:22,102,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Galón de Resistol 5000 | ferretera_industrial @ hotmail.com,8
+🟡 MEDIA,2025-10-24 21:08:37,107,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo, precio",Necesito una cotización de mayoreo | Precio break sencillo # 20,6
+🟡 MEDIA,2025-10-22 20:55:00,109,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,5
+🟡 MEDIA,2025-10-21 00:50:11,111,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo,5
+🟡 MEDIA,2025-10-20 04:45:53,111,Comprador de Volumen,Pisos/Loseta,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Loseta,5
+🟡 MEDIA,2025-10-16 20:57:56,115,Comprador de Volumen,No especificado,"busca_producto, cotizacion_mayoreo",Necesito una cotización de mayoreo | Necesito impermeabilizar un techo,6
