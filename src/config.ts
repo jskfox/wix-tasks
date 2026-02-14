@@ -9,6 +9,16 @@ export const config = {
     user: process.env.PG_USER || 'postgres',
     password: process.env.PG_PASSWORD || '',
   },
+  mssql: {
+    server: process.env.MSSQL_SERVER || 'localhost',
+    port: parseInt(process.env.MSSQL_PORT || '1433', 10),
+    database: process.env.MSSQL_DATABASE || 'LDCOM_PROCONSA',
+    user: process.env.MSSQL_USER || '',
+    password: process.env.MSSQL_PASSWORD || '',
+    encrypt: process.env.MSSQL_ENCRYPT === 'true',
+    trustServerCertificate: process.env.MSSQL_TRUST_SERVER_CERT !== 'false',
+    empId: parseInt(process.env.MSSQL_EMP_ID || '1', 10),
+  },
   sucursalWix: parseInt(process.env.SUCURSAL_WIX || '101', 10),
 
   wix: {

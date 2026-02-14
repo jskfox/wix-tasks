@@ -2,12 +2,14 @@ import { config } from './config';
 import { logger } from './utils/logger';
 import { registerTask, startAll, stopAll } from './scheduler';
 import { closePool } from './services/database';
+import { closeMssqlPool } from './services/mssql';
 
 // ── Tasks ────────────────────────────────────────────────────────────────────
 import { PriceInventorySyncTask } from './tasks/price-inventory-sync';
 import { AbandonedCartsTask } from './tasks/abandoned-carts';
 import { OdooChatAnalysisTask } from './tasks/odoo-chat-analysis';
 import { OdooChatLeadsTask } from './tasks/odoo-chat-leads';
+import { OdooInventorySyncTask } from './tasks/odoo-inventory-sync';
 
 const CTX = 'Main';
 
@@ -23,6 +25,7 @@ async function main(): Promise<void> {
   registerTask(new AbandonedCartsTask());
   registerTask(new OdooChatAnalysisTask());
   registerTask(new OdooChatLeadsTask());
+  registerTask(new OdooInventorySyncTask());
 
   // Start the scheduler
   startAll();
@@ -34,7 +37,7 @@ async function main(): Promise<void> {
 function shutdown(signal: string): void {
   logger.info(CTX, `Received ${signal} — shutting down...`);
   stopAll();
-  closePool()
+  Promise.all([closePool(), closeMssqlPool()])
     .then(() => {
       logger.info(CTX, 'Shutdown complete');
       process.exit(0);

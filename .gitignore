@@ -3,3 +3,11 @@ dist/
 .env
 *.js.map
 *.d.ts
+.gemini/
+.agent/
+.claude/
+.cursor/
+.vscode/
+.antigravity/
+.github/
+.windsurf/

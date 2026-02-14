@@ -1,0 +1,41 @@
+name,email,phone,mobile,function,company_name,street,city,state_id,country_id,comment,category_id
+Davidprecursor7416,davidprecursor7416@gmail.com,,,,,,,,México,"Fecha chat: 2025-12-22 16:03:11
+Tipo cliente: Comprador de Volumen
+Intenciones: busca_producto, cotizacion_mayoreo, talleres_clinicas
+Productos: No especificado
+Contexto: Necesito una cotización de mayoreo | Buenos dias  para una escalera para subir a un techo | Davidprecursor7416@gmail.com...",Talleres/Clinicas
+Osvaldo Antonio Soto Quintero,tallersoqui@hotmail.com,,,,,,,,México,"Fecha chat: 2025-11-06 02:24:30
+Tipo cliente: Comprador de Volumen
+Intenciones: busca_producto, cotizacion_mayoreo, talleres_clinicas
+Productos: No especificado
+Contexto: Necesito una cotización de mayoreo | Cemenquin multiproposito blanco | Por este medio | Tallersoqui@hotmail.com...",Talleres/Clinicas
+Irvinalee,irvinalee@gmail.com,,,,,,,,México,"Fecha chat: 2026-01-06 21:00:36
+Tipo cliente: Profesional en Formación
+Intenciones: talleres_clinicas
+Productos: No especificado
+Contexto: Me interesan los talleres gratuitos | Tal vez para otro taller | irvinalee@gmail.com...",Talleres/Clinicas
+Noerogado,noerogado@gmail.com,,,,,,,,México,"Fecha chat: 2025-12-15 18:53:21
+Tipo cliente: Profesional en Formación
+Intenciones: talleres_clinicas
+Productos: No especificado
+Contexto: Me interesan los talleres gratuitos | Tal vez para otro taller | noerogado@gmail.com | Cómo compro aquí en CDMX el quita cochambre magico | Mágico | Dónde compro...",Talleres/Clinicas
+Lanyvntas,lanyvntas@hotmail.com,,,,,,,,México,"Fecha chat: 2025-12-14 03:53:42
+Tipo cliente: Profesional en Formación
+Intenciones: talleres_clinicas
+Productos: No especificado
+Contexto: Me interesan los talleres gratuitos | Tal vez para otro taller | Lanyvntas@hotmail.com...",Talleres/Clinicas
+Gchflores,gchflores@hotmail.com,,,,,,,,México,"Fecha chat: 2025-12-09 18:53:11
+Tipo cliente: Profesional en Formación
+Intenciones: talleres_clinicas
+Productos: No especificado
+Contexto: Me interesan los talleres gratuitos | Tal vez para otro taller | gchflores@hotmail.com...",Talleres/Clinicas
+Alberto Valdez,alberto@hotmail.com,,526865691026,,,,,,México,"Fecha chat: 2025-11-03 20:50:48
+Tipo cliente: Profesional en Formación
+Intenciones: talleres_clinicas
+Productos: No especificado
+Contexto: Cómo obtengo mi 10% de descuento? | Me interesan los talleres gratuitos | Tal vez para otro taller | Boiler de paso | Alberto@hotmail.com...",Talleres/Clinicas
+Jskirk+Newmail,jskirk+newmail@gmail.com,,,,,,,,México,"Fecha chat: 2025-10-23 00:29:49
+Tipo cliente: Profesional en Formación
+Intenciones: talleres_clinicas
+Productos: No especificado
+Contexto: Me interesan los talleres gratuitos | Claro que sí! | Me interesan los talleres gratuitos | Tal vez para otro taller | jskirk+newmail@gmail.com...",Talleres/Clinicas
