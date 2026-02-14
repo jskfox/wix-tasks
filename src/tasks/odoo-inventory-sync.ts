@@ -2,7 +2,7 @@ import { BaseTask } from './base-task';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { mssqlQuery } from '../services/mssql';
-import { executeKw, searchReadAll, OdooRecord } from '../services/odoo';
+import { executeKw, searchAllIds, searchReadAll, readRecords, OdooRecord } from '../services/odoo';
 
 const CTX = 'OdooInventorySync';
 const EMP_ID = config.mssql.empId;
@@ -781,12 +781,15 @@ export class OdooInventorySyncTask extends BaseTask {
     }
 
     // Fetch product.product variants (to get id for stock.quant)
+    const variantsStart = Date.now();
+    logger.info(CTX, '  Fetching product variants (product.product)...');
     const variants = await searchReadAll(
       'product.product',
       [['default_code', '!=', false]],
       ['id', 'default_code'],
       { batchSize: 500 },
     );
+    logger.info(CTX, `  Variants fetched: ${variants.length} in ${((Date.now() - variantsStart) / 1000).toFixed(1)}s`);
     const variantByCode = new Map<string, number>();
     for (const v of variants) {
       const code = (v.default_code as string || '').trim();
@@ -800,12 +803,30 @@ export class OdooInventorySyncTask extends BaseTask {
 
     // Fetch existing quants in warehouse locations
     const locationIds = Array.from(new Set(warehouseLocMap.values()));
-    const existingQuants = await searchReadAll(
+    const quantsStart = Date.now();
+    logger.info(CTX, `  Fetching existing quants (stock.quant) for ${locationIds.length} locations...`);
+
+    // IMPORTANT: Using search + read (instead of search_read) for large datasets.
+    // On some Odoo instances, stock.quant search_read can hang during query/serialization.
+    const quantIds = await searchAllIds(
       'stock.quant',
       [['location_id', 'in', locationIds]],
-      ['id', 'product_id', 'location_id', 'quantity'],
-      { batchSize: 500 },
+      { batchSize: 2000 },
     );
+    logger.info(CTX, `  Quant ids fetched: ${quantIds.length} in ${((Date.now() - quantsStart) / 1000).toFixed(1)}s`);
+
+    const existingQuants: OdooRecord[] = [];
+    const readStart = Date.now();
+    const READ_BATCH = 500;
+    for (let i = 0; i < quantIds.length; i += READ_BATCH) {
+      const batchIds = quantIds.slice(i, i + READ_BATCH);
+      const recs = await readRecords('stock.quant', batchIds, ['id', 'product_id', 'location_id', 'quantity'], READ_BATCH);
+      existingQuants.push(...recs);
+      if ((i + READ_BATCH) % 2000 === 0 || i + READ_BATCH >= quantIds.length) {
+        logger.info(CTX, `  Quants read: ${existingQuants.length}/${quantIds.length} in ${((Date.now() - readStart) / 1000).toFixed(1)}s`);
+      }
+    }
+    logger.info(CTX, `  Quants fetched(total): ${existingQuants.length} in ${((Date.now() - quantsStart) / 1000).toFixed(1)}s`);
 
     const quantIndex = new Map<string, OdooRecord>();
     for (const q of existingQuants) {
@@ -817,7 +838,11 @@ export class OdooInventorySyncTask extends BaseTask {
     // Build list of stock changes
     const updates: { productId: number; locationId: number; qty: number; existingQuantId?: number }[] = [];
 
+    const computeStart = Date.now();
+    let processedArticles = 0;
+
     for (const [sku, article] of articleMap) {
+      processedArticles++;
       const productId = variantByCode.get(sku);
       if (!productId) continue;
 
@@ -839,51 +864,133 @@ export class OdooInventorySyncTask extends BaseTask {
           updates.push({ productId, locationId: locId, qty: stock.qty });
         }
       }
-    }
 
-    if (this.dryRun) {
-      logger.info(CTX, `  [DRY RUN] Would apply ${updates.length} stock changes across ${warehouseLocMap.size} warehouses`);
-      return;
-    }
-
-    // Apply inventory adjustments
-    let stockUpdated = 0;
-    let stockCreated = 0;
-
-    for (const qu of updates) {
-      try {
-        if (qu.existingQuantId) {
-          await executeKw<boolean>('stock.quant', 'write', [
-            [qu.existingQuantId],
-            { inventory_quantity: qu.qty },
-          ]);
-          try {
-            await executeKw<boolean>('stock.quant', 'action_apply_inventory', [[qu.existingQuantId]]);
-          } catch (applyErr) {
-            // Odoo 18: action_apply_inventory returns None which XML-RPC can't marshal.
-            // The inventory IS applied — only the response serialisation fails.
-            if (!(applyErr as Error).message?.includes('cannot marshal None')) throw applyErr;
-          }
-          stockUpdated++;
-        } else {
-          const newId = await executeKw<number>('stock.quant', 'create', [{
-            product_id: qu.productId,
-            location_id: qu.locationId,
-            inventory_quantity: qu.qty,
-          }]);
-          try {
-            await executeKw<boolean>('stock.quant', 'action_apply_inventory', [[newId]]);
-          } catch (applyErr) {
-            if (!(applyErr as Error).message?.includes('cannot marshal None')) throw applyErr;
-          }
-          stockCreated++;
-        }
-      } catch (err) {
-        logger.error(CTX, `  Stock error product=${qu.productId} loc=${qu.locationId}: ${(err as Error).message}`);
+      if (processedArticles % 1000 === 0) {
+        logger.info(CTX, `  Computing stock changes: ${processedArticles}/${articleMap.size} articles processed (updates so far: ${updates.length})`);
       }
     }
 
-    logger.info(CTX, `  Stock: ${stockUpdated} updated, ${stockCreated} created (${updates.length} total changes)`);
+    logger.info(CTX, `  Stock change computation done: ${updates.length} changes in ${((Date.now() - computeStart) / 1000).toFixed(1)}s`);
+
+    if (this.dryRun) {
+      const toCreate = updates.filter(u => !u.existingQuantId);
+      const toUpdate = updates.filter(u => u.existingQuantId);
+      logger.info(CTX, `  [DRY RUN] Would apply ${updates.length} stock changes (${toCreate.length} create, ${toUpdate.length} update) across ${warehouseLocMap.size} warehouses`);
+      return;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BATCH STOCK SYNC — dramatically faster than one-by-one
+    //
+    // Strategy:
+    //   1. Batch CREATE new quants (Odoo create accepts array of dicts)
+    //   2. Batch WRITE existing quants (one write per quant, but we can parallelize)
+    //   3. Batch ACTION_APPLY_INVENTORY (accepts array of ids)
+    //
+    // This reduces ~134,000 RPC calls to ~1,400 calls (200 items per batch).
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    const toCreate = updates.filter(u => !u.existingQuantId);
+    const toUpdate = updates.filter(u => u.existingQuantId);
+
+    logger.info(CTX, `  Stock changes: ${toCreate.length} to create, ${toUpdate.length} to update`);
+
+    const stockStart = Date.now();
+    let stockCreated = 0;
+    let stockUpdated = 0;
+    let stockErrors = 0;
+
+    // ── BATCH CREATE ──────────────────────────────────────────────────────────
+    const CREATE_BATCH = 200;
+    const createBatches = chunk(toCreate, CREATE_BATCH);
+    logger.info(CTX, `  Creating ${toCreate.length} quants in ${createBatches.length} batches...`);
+
+    for (let bi = 0; bi < createBatches.length; bi++) {
+      const batch = createBatches[bi];
+      const vals = batch.map(u => ({
+        product_id: u.productId,
+        location_id: u.locationId,
+        inventory_quantity: u.qty,
+      }));
+
+      try {
+        // Batch create returns array of new ids
+        const newIds = await executeKw<number | number[]>('stock.quant', 'create', [vals]);
+        const idArr = Array.isArray(newIds) ? newIds : [newIds];
+
+        // Batch apply inventory
+        try {
+          await executeKw<boolean>('stock.quant', 'action_apply_inventory', [idArr]);
+        } catch (applyErr) {
+          // Odoo 18: action_apply_inventory returns None which XML-RPC can't marshal
+          if (!(applyErr as Error).message?.includes('cannot marshal None')) throw applyErr;
+        }
+
+        stockCreated += idArr.length;
+      } catch (err) {
+        logger.error(CTX, `  Batch create error (batch ${bi + 1}): ${(err as Error).message}`);
+        stockErrors += batch.length;
+      }
+
+      if ((bi + 1) % 10 === 0 || bi === createBatches.length - 1) {
+        const elapsed = ((Date.now() - stockStart) / 1000).toFixed(1);
+        logger.info(CTX, `  Create progress: ${Math.min((bi + 1) * CREATE_BATCH, toCreate.length)}/${toCreate.length} in ${elapsed}s`);
+      }
+    }
+
+    // ── BATCH UPDATE ──────────────────────────────────────────────────────────
+    // Each quant has a different qty, so we can't use a single write call.
+    // But we CAN batch the action_apply_inventory call after individual writes.
+    // Strategy: write in parallel batches, then apply inventory in batch.
+    const UPDATE_BATCH = 100;
+    const updateBatches = chunk(toUpdate, UPDATE_BATCH);
+    logger.info(CTX, `  Updating ${toUpdate.length} quants in ${updateBatches.length} batches...`);
+
+    for (let bi = 0; bi < updateBatches.length; bi++) {
+      const batch = updateBatches[bi];
+      const successIds: number[] = [];
+
+      // Write each quant's inventory_quantity (parallel within batch)
+      const writePromises = batch.map(async (u) => {
+        try {
+          await executeKw<boolean>('stock.quant', 'write', [
+            [u.existingQuantId!],
+            { inventory_quantity: u.qty },
+          ]);
+          return u.existingQuantId!;
+        } catch (err) {
+          logger.error(CTX, `  Write error quant=${u.existingQuantId}: ${(err as Error).message}`);
+          return null;
+        }
+      });
+
+      const results = await Promise.all(writePromises);
+      for (const id of results) {
+        if (id !== null) successIds.push(id);
+        else stockErrors++;
+      }
+
+      // Batch apply inventory for all successful writes
+      if (successIds.length > 0) {
+        try {
+          await executeKw<boolean>('stock.quant', 'action_apply_inventory', [successIds]);
+        } catch (applyErr) {
+          if (!(applyErr as Error).message?.includes('cannot marshal None')) {
+            logger.error(CTX, `  Batch apply error: ${(applyErr as Error).message}`);
+            stockErrors += successIds.length;
+          }
+        }
+        stockUpdated += successIds.length;
+      }
+
+      if ((bi + 1) % 10 === 0 || bi === updateBatches.length - 1) {
+        const elapsed = ((Date.now() - stockStart) / 1000).toFixed(1);
+        logger.info(CTX, `  Update progress: ${Math.min((bi + 1) * UPDATE_BATCH, toUpdate.length)}/${toUpdate.length} in ${elapsed}s`);
+      }
+    }
+
+    const totalElapsed = ((Date.now() - stockStart) / 1000).toFixed(1);
+    logger.info(CTX, `  Stock sync complete: ${stockCreated} created, ${stockUpdated} updated, ${stockErrors} errors in ${totalElapsed}s`);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

@@ -3,6 +3,7 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 
 const CTX = 'Odoo';
+const RPC_TIMEOUT_MS = parseInt(process.env.ODOO_RPC_TIMEOUT_MS || '120000', 10);
 
 let uid: number | null = null;
 
@@ -25,6 +26,22 @@ function objectClient(): Client {
   return makeClient('/xmlrpc/2/object');
 }
 
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`Odoo RPC timeout after ${ms}ms: ${label}`)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (err) => {
+        clearTimeout(t);
+        reject(err);
+      },
+    );
+  });
+}
+
 function callRpc<T>(client: Client, method: string, params: unknown[]): Promise<T> {
   return new Promise((resolve, reject) => {
     client.methodCall(method, params as any[], (err: any, value: any) => {
@@ -41,7 +58,11 @@ export async function authenticate(): Promise<number> {
   logger.info(CTX, `Authenticating as ${username}...`);
 
   const client = commonClient();
-  const result = await callRpc<number | false>(client, 'authenticate', [db, username, password, {}]);
+  const result = await withTimeout(
+    callRpc<number | false>(client, 'authenticate', [db, username, password, {}]),
+    RPC_TIMEOUT_MS,
+    'common.authenticate',
+  );
 
   if (!result) throw new Error('Odoo authentication failed');
 
@@ -63,7 +84,8 @@ export async function executeKw<T>(
   const params: unknown[] = [db, userId, password, model, method, args];
   if (kwargs) params.push(kwargs);
 
-  return callRpc<T>(client, 'execute_kw', params);
+  const label = `${model}.${method}`;
+  return withTimeout(callRpc<T>(client, 'execute_kw', params), RPC_TIMEOUT_MS, label);
 }
 
 // ── Convenience helpers ────────────────────────────────────────────────────
@@ -89,22 +111,67 @@ export async function searchReadAll(
   model: string,
   domain: unknown[][],
   fields: string[],
-  opts?: { order?: string; batchSize?: number },
+  opts?: { order?: string; batchSize?: number; maxPages?: number },
 ): Promise<OdooRecord[]> {
   const batchSize = opts?.batchSize ?? 200;
+  const maxPages = opts?.maxPages ?? 5000;
+  const order = opts?.order ?? 'id asc';
   const all: OdooRecord[] = [];
   let offset = 0;
+  let page = 0;
 
   while (true) {
+    page += 1;
+    if (page > maxPages) {
+      throw new Error(`searchReadAll exceeded maxPages=${maxPages} for ${model} (offset=${offset}, batchSize=${batchSize})`);
+    }
+
+    logger.debug(CTX, `${model} searchReadAll requesting page=${page} offset=${offset} limit=${batchSize}`);
     const chunk = await searchRead(model, domain, fields, {
       limit: batchSize,
       offset,
-      order: opts?.order,
+      order,
     });
     if (chunk.length === 0) break;
     all.push(...chunk);
-    offset += batchSize;
+    offset += chunk.length;
     logger.debug(CTX, `${model} searchReadAll: ${all.length} records`);
+
+    // If we received less than requested, we are at the last page.
+    // This avoids an extra request that can hang on some Odoo instances.
+    if (chunk.length < batchSize) break;
+  }
+
+  return all;
+}
+
+export async function searchAllIds(
+  model: string,
+  domain: unknown[][],
+  opts?: { order?: string; batchSize?: number; maxPages?: number },
+): Promise<number[]> {
+  const batchSize = opts?.batchSize ?? 1000;
+  const maxPages = opts?.maxPages ?? 5000;
+  const order = opts?.order ?? 'id asc';
+
+  const all: number[] = [];
+  let offset = 0;
+  let page = 0;
+
+  while (true) {
+    page += 1;
+    if (page > maxPages) {
+      throw new Error(`searchAllIds exceeded maxPages=${maxPages} for ${model} (offset=${offset}, batchSize=${batchSize})`);
+    }
+
+    logger.debug(CTX, `${model} searchAllIds requesting page=${page} offset=${offset} limit=${batchSize}`);
+    const ids = await executeKw<number[]>(model, 'search', [domain], { limit: batchSize, offset, order });
+    if (!ids || ids.length === 0) break;
+    all.push(...ids);
+    offset += ids.length;
+    logger.debug(CTX, `${model} searchAllIds: ${all.length} ids`);
+
+    if (ids.length < batchSize) break;
   }
 
   return all;
