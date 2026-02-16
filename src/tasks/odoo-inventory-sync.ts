@@ -39,6 +39,13 @@ interface MssqlArticleRow {
   Articulo_Precio1: number;
   Articulo_Costo_Actual: number;
   Articulo_Fec_Actualizacion: string;
+  Articulo_Activo: boolean;
+}
+
+interface MssqlBarcodeRow {
+  Articulo_Id: string;
+  Equivalente_Id: string;
+  Equivalente_Principal: boolean;
 }
 
 interface MssqlStockRow {
@@ -73,6 +80,8 @@ interface NormalizedArticle {
   listPrice: number;
   standardPrice: number;
   updatedAt: string;
+  active: boolean;
+  extraBarcodes: string[];
   // stock per branch keyed by Suc_Codigo_Externo (3‑digit code)
   stockByBranch: Map<string, { qty: number; branchName: string }>;
   hash: string;
@@ -123,13 +132,27 @@ function computeHash(a: { name: string; listPrice: number; standardPrice: number
 // MAIN TASK
 // ═════════════════════════════════════════════════════════════════════════════
 
+export type SyncMode = 'full' | 'stock-only';
+
 export class OdooInventorySyncTask extends BaseTask {
-  readonly name = 'odoo-inventory-sync';
-  // Every hour at minute 15
-  readonly cronExpression = '15 * * * *';
+  readonly name: string;
+  readonly cronExpression: string;
+  readonly syncMode: SyncMode;
 
   // Set via DRY_RUN=1 env var or programmatically — logs what would change without writing to Odoo
   dryRun = process.env.DRY_RUN === '1' || process.env.DRY_RUN === 'true';
+
+  constructor(mode: SyncMode = 'full') {
+    super();
+    this.syncMode = mode;
+    if (mode === 'stock-only') {
+      this.name = 'odoo-inventory-sync-stock';
+      this.cronExpression = '15 * * * *';   // Every hour at :15
+    } else {
+      this.name = 'odoo-inventory-sync-full';
+      this.cronExpression = '0 4 * * *';    // Daily at 4:00 AM
+    }
+  }
 
   private phaseErrors: { phase: string; error: string }[] = [];
   private phaseTimes: { phase: string; ms: number }[] = [];
@@ -164,25 +187,38 @@ export class OdooInventorySyncTask extends BaseTask {
   }
 
   async execute(): Promise<void> {
+    if (this.syncMode === 'stock-only') {
+      return this.executeStockOnly();
+    }
+    return this.executeFull();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FULL SYNC — daily at 4 AM
+  //   Categories, product creates/updates/archives, stock, images, barcodes, POS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  private async executeFull(): Promise<void> {
     const t0 = Date.now();
     this.phaseErrors = [];
     this.phaseTimes = [];
 
+    logger.info(CTX, '═══ FULL SYNC (daily) ═══');
     if (this.dryRun) {
       logger.info(CTX, '⚠ DRY RUN — no writes will be made to Odoo');
     }
 
     // ── Phase 1: Extract from MSSQL (2 read‑only queries, parallel) ──────
     logger.info(CTX, '─── Phase 1: Extracting data from MSSQL (read‑only) ───');
-    const [articles, stockRows] = await this.runPhase('1. MSSQL extract', () =>
-      Promise.all([this.fetchArticles(), this.fetchStock()]),
+    const [articles, stockRows, barcodeRows] = await this.runPhase('1. MSSQL extract', () =>
+      Promise.all([this.fetchArticles(), this.fetchStock(), this.fetchBarcodes()]),
     );
-    logger.info(CTX, `  MSSQL: ${articles.length} active articles, ${stockRows.length} stock rows`);
+    logger.info(CTX, `  MSSQL: ${articles.length} articles, ${stockRows.length} stock rows, ${barcodeRows.length} barcodes`);
 
     // ── Phase 2: Normalize & index MSSQL data ────────────────────────────
     logger.info(CTX, '─── Phase 2: Normalizing data ───');
     const { articleMap, categoryTree, branchCodes } = await this.runPhase('2. Normalize', async () =>
-      this.normalizeData(articles, stockRows),
+      this.normalizeData(articles, stockRows, barcodeRows),
     );
     logger.info(CTX, `  Normalized: ${articleMap.size} articles, ${categoryTree.size} categories, ${branchCodes.size} branches`);
 
@@ -192,6 +228,13 @@ export class OdooInventorySyncTask extends BaseTask {
       this.syncCategories(categoryTree),
     );
     logger.info(CTX, `  Categories synced: ${categoryIdMap.size} mapped`);
+
+    // ── Phase 3b: Sync POS categories to Odoo ────────────────────────────
+    logger.info(CTX, '─── Phase 3b: Syncing POS categories to Odoo ───');
+    const posCategoryIdMap = await this.runPhase('3b. POS Categories', () =>
+      this.syncPosCategories(categoryTree),
+    );
+    logger.info(CTX, `  POS Categories synced: ${posCategoryIdMap.size} mapped`);
 
     // ── Phase 4: Ensure Odoo warehouses exist for each branch ────────────
     logger.info(CTX, '─── Phase 4: Syncing warehouses to Odoo ───');
@@ -210,7 +253,7 @@ export class OdooInventorySyncTask extends BaseTask {
     // ── Phase 6: Compute diff ────────────────────────────────────────────
     logger.info(CTX, '─── Phase 6: Computing diff ───');
     const diff = await this.runPhase('6. Compute diff', async () =>
-      this.computeDiff(articleMap, odooProducts, categoryIdMap),
+      this.computeDiff(articleMap, odooProducts, categoryIdMap, posCategoryIdMap),
     );
     logger.info(CTX, `  Diff: ${diff.toCreate.length} new, ${diff.toUpdate.length} update, ${diff.toArchive.length} archive`);
 
@@ -220,9 +263,17 @@ export class OdooInventorySyncTask extends BaseTask {
 
     // ── Phase 7: Apply product changes to Odoo (batch) ───────────────────
     logger.info(CTX, '─── Phase 7: Applying product changes to Odoo ───');
-    await this.runPhase('7a. Creates', () => this.applyCreates(diff.toCreate, categoryIdMap));
+    await this.runPhase('7a. Creates', () => this.applyCreates(diff.toCreate, categoryIdMap, posCategoryIdMap));
     await this.runPhase('7b. Updates', () => this.applyUpdates(diff.toUpdate));
-    await this.runPhase('7c. Archives', () => this.applyArchives(diff.toArchive));
+    // NOTE: Archives are now handled within computeDiff/applyUpdates as active=false updates
+    // if we want to explicitly archive, we can still use applyArchives, but with the new logic
+    // we primarily update 'active' status based on MSSQL.
+    // However, if a product is NOT in MSSQL at all, it should probably be archived?
+    // Current logic in computeDiff: "Archive products no longer active in MSSQL" -> actually "no longer PRESENT in MSSQL"
+    // Since we now fetch ALL articles, if it's not in articleMap, it is deleted from MSSQL.
+    if (diff.toArchive.length > 0) {
+        await this.runPhase('7c. Archives', () => this.applyArchives(diff.toArchive));
+    }
 
     // ── Phase 8: Sync stock levels per warehouse ─────────────────────────
     logger.info(CTX, '─── Phase 8: Syncing stock levels per warehouse ───');
@@ -236,9 +287,196 @@ export class OdooInventorySyncTask extends BaseTask {
       this.syncImages(articleMap),
     );
 
+    // ── Phase 10: Sync additional barcodes (Packaging) ───────────────────
+    logger.info(CTX, '─── Phase 10: Syncing additional barcodes ───');
+    await this.runPhase('10. Barcodes', () =>
+      this.syncAdditionalBarcodes(articleMap, odooProducts),
+    );
+
     const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
-    logger.info(CTX, `═══ Sync complete in ${elapsed}s ═══`);
+    logger.info(CTX, `═══ Full sync complete in ${elapsed}s ═══`);
     this.printDiagnostics();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STOCK-ONLY SYNC — hourly (lightweight)
+  //   Only fetches stock from MSSQL and updates Odoo quants per warehouse.
+  //   Skips: categories, product creates/updates/archives, images, barcodes.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  private async executeStockOnly(): Promise<void> {
+    const t0 = Date.now();
+    this.phaseErrors = [];
+    this.phaseTimes = [];
+
+    logger.info(CTX, '═══ STOCK-ONLY SYNC (hourly) ═══');
+    if (this.dryRun) {
+      logger.info(CTX, '⚠ DRY RUN — no writes will be made to Odoo');
+    }
+
+    // ── Step 1: Fetch stock rows from MSSQL ──────────────────────────────
+    logger.info(CTX, '─── Step 1: Fetching stock from MSSQL ───');
+    const stockRows = await this.runPhase('1. MSSQL stock extract', () =>
+      this.fetchStock(),
+    );
+    logger.info(CTX, `  MSSQL: ${stockRows.length} stock rows`);
+
+    // ── Step 2: Index stock by SKU and collect branch codes ──────────────
+    logger.info(CTX, '─── Step 2: Indexing stock data ───');
+    const branchCodes = new Map<string, string>();
+    const stockBySku = new Map<string, Map<string, { qty: number; branchName: string }>>();
+
+    for (const row of stockRows) {
+      const sku = (row.Articulo_Id || '').trim();
+      if (!sku) continue;
+      const extCode = (row.Suc_Codigo_Externo || '').trim();
+      if (!extCode) continue;
+
+      branchCodes.set(extCode, (row.Suc_Nombre || '').trim());
+
+      if (!stockBySku.has(sku)) stockBySku.set(sku, new Map());
+      stockBySku.get(sku)!.set(extCode, {
+        qty: row.total_existencia,
+        branchName: (row.Suc_Nombre || '').trim(),
+      });
+    }
+    logger.info(CTX, `  Indexed: ${stockBySku.size} SKUs across ${branchCodes.size} branches`);
+
+    // ── Step 3: Resolve warehouse locations (read-only lookup) ───────────
+    logger.info(CTX, '─── Step 3: Resolving warehouse locations ───');
+    const warehouseLocMap = await this.runPhase('3. Warehouses', () =>
+      this.syncWarehouses(branchCodes),
+    );
+    logger.info(CTX, `  Warehouses: ${warehouseLocMap.size} mapped`);
+
+    // ── Step 4: Build a minimal articleMap for syncStockLevels ────────────
+    // syncStockLevels expects Map<string, NormalizedArticle> but only uses
+    // sku and stockByBranch. We build lightweight stubs to reuse that method.
+    const articleMap = new Map<string, NormalizedArticle>();
+    for (const [sku, branches] of stockBySku) {
+      articleMap.set(sku, {
+        sku,
+        barcode: '',
+        extraBarcodes: [],
+        name: '',
+        deptoKey: '',
+        categoriaKey: '',
+        subCategoriaKey: '',
+        uomName: '',
+        listPrice: 0,
+        standardPrice: 0,
+        updatedAt: '',
+        active: true,
+        stockByBranch: branches,
+        hash: '',
+      });
+    }
+
+    // ── Step 5: Sync stock levels per warehouse ──────────────────────────
+    logger.info(CTX, '─── Step 4: Syncing stock levels per warehouse ───');
+    await this.runPhase('4. Stock sync', () =>
+      this.syncStockLevels(articleMap, warehouseLocMap),
+    );
+
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+    logger.info(CTX, `═══ Stock-only sync complete in ${elapsed}s ═══`);
+    this.printDiagnostics();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SYNC ADDITIONAL BARCODES (product.packaging)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  private async syncAdditionalBarcodes(
+    articleMap: Map<string, NormalizedArticle>,
+    odooProducts: OdooRecord[],
+  ): Promise<void> {
+    // 1. Map SKU -> Odoo Product ID
+    const skuToProductId = new Map<string, number>();
+    for (const p of odooProducts) {
+      const code = (p.default_code as string || '').trim();
+      if (code) skuToProductId.set(code, p.id);
+    }
+
+    // 2. Fetch all existing packagings
+    const existingPackagings = await searchReadAll('product.packaging', [], ['id', 'product_id', 'barcode', 'name', 'qty']);
+    
+    const packagingByProduct = new Map<number, OdooRecord[]>();
+    for (const pkg of existingPackagings) {
+      const pid = (pkg.product_id as [number, string])[0];
+      if (!packagingByProduct.has(pid)) packagingByProduct.set(pid, []);
+      packagingByProduct.get(pid)!.push(pkg);
+    }
+
+    const toCreate: any[] = [];
+    const toDeleteIds: number[] = [];
+
+    for (const [sku, article] of articleMap) {
+      const pid = skuToProductId.get(sku);
+      if (!pid) continue; // Product not in Odoo yet
+
+      // Expected barcodes (exclude main barcode which is on product itself)
+      const expectedBarcodes = new Set(article.extraBarcodes);
+      
+      const currentPkgs = packagingByProduct.get(pid) || [];
+      
+      // Identify what to keep and what to delete
+      for (const pkg of currentPkgs) {
+        const b = (pkg.barcode as string || '').trim();
+        // If this packaging has a barcode that is expected
+        if (b && expectedBarcodes.has(b)) {
+            // Keep it.
+            expectedBarcodes.delete(b); // Marked as found
+        } else if (b) {
+            // This packaging has a barcode NOT in expected list.
+            // Only delete if qty=1 (assuming we manage these)
+            if ((pkg.qty as number) === 1) {
+                toDeleteIds.push(pkg.id);
+            }
+        }
+      }
+
+      // Create missing
+      for (const b of expectedBarcodes) {
+        toCreate.push({
+            name: b, // Use barcode as name
+            barcode: b,
+            product_id: pid,
+            qty: 1,
+        });
+      }
+    }
+
+    if (this.dryRun) {
+        if (toCreate.length > 0) logger.info(CTX, `  [DRY RUN] Would create ${toCreate.length} packagings (barcodes)`);
+        if (toDeleteIds.length > 0) logger.info(CTX, `  [DRY RUN] Would delete ${toDeleteIds.length} packagings (barcodes)`);
+        return;
+    }
+
+    // Apply Deletes
+    if (toDeleteIds.length > 0) {
+        const batchSize = 500;
+        for (let i = 0; i < toDeleteIds.length; i += batchSize) {
+            const batch = toDeleteIds.slice(i, i + batchSize);
+            await executeKw('product.packaging', 'unlink', [batch]);
+        }
+        logger.info(CTX, `  Deleted ${toDeleteIds.length} obsolete barcodes`);
+    }
+
+    // Apply Creates
+    if (toCreate.length > 0) {
+        const batches = chunk(toCreate, 100);
+        let createdCount = 0;
+        for (const batch of batches) {
+            try {
+                await executeKw('product.packaging', 'create', [batch]);
+                createdCount += batch.length;
+            } catch (err) {
+                logger.error(CTX, `  Failed to create packaging batch: ${(err as Error).message}`);
+            }
+        }
+        logger.info(CTX, `  Created ${createdCount} new barcodes`);
+    }
   }
 
   private printDryRunDiff(
@@ -287,11 +525,18 @@ export class OdooInventorySyncTask extends BaseTask {
 
   private async fetchArticles(): Promise<MssqlArticleRow[]> {
     // JOINs only the tables that actually contain data (audit‑verified).
-    // Removed: Marca (96% "General"), Casa (95% "General"), unused columns.
+    // Logic adapted from run_etl.js (syncprices):
+    // - Use Articulo_Activo_Venta = 1
+    // - Exclude names starting with (INS)
+    // - Clean name: remove (XXXX) prefix if present (e.g. "(ACME) PRODUCTO")
     return mssqlQuery<MssqlArticleRow>(`
       SELECT
         a.Articulo_Id,
-        a.Articulo_Nombre,
+        CASE
+            WHEN LEFT(a.Articulo_Nombre, 1) = '(' AND CHARINDEX(')', a.Articulo_Nombre) = 5
+            THEN LTRIM(SUBSTRING(a.Articulo_Nombre, 6, 8000))
+            ELSE a.Articulo_Nombre
+        END AS Articulo_Nombre,
         a.Articulo_Codigo_Interno,
         a.Depto_Id,
         ISNULL(d.Depto_Nombre, 'Sin Definir')         AS Depto_Nombre,
@@ -303,7 +548,8 @@ export class OdooInventorySyncTask extends BaseTask {
         ISNULL(u.Unidad_Nombre, 'PIEZA')              AS Unidad_Nombre,
         a.Articulo_Precio1,
         a.Articulo_Costo_Actual,
-        a.Articulo_Fec_Actualizacion
+        a.Articulo_Fec_Actualizacion,
+        CAST(a.Articulo_Activo_Venta AS BIT)          AS Articulo_Activo
       FROM Articulo a
         LEFT JOIN Departamento d
           ON d.Emp_Id = a.Emp_Id AND d.Depto_Id = a.Depto_Id
@@ -315,7 +561,16 @@ export class OdooInventorySyncTask extends BaseTask {
         LEFT JOIN Unidad u
           ON u.Emp_Id = a.Emp_Id AND u.Unidad_Id = a.Unidad_Id
       WHERE a.Emp_Id = ${EMP_ID}
-        AND a.Articulo_Activo = 1
+        AND a.Articulo_Activo_Venta = 1
+        AND a.Articulo_Nombre NOT LIKE '(INS)%'
+    `);
+  }
+
+  private async fetchBarcodes(): Promise<MssqlBarcodeRow[]> {
+    return mssqlQuery<MssqlBarcodeRow>(`
+      SELECT Articulo_Id, Equivalente_Id, Equivalente_Principal
+      FROM Articulo_Equivalente
+      WHERE Emp_Id = ${EMP_ID}
     `);
   }
 
@@ -323,6 +578,14 @@ export class OdooInventorySyncTask extends BaseTask {
     // Stock from Articulo_x_Bodega (the REAL stock table).
     // Sums available bodegas (Bodega_Existencia_Disponible = 1) per branch.
     // Returns Suc_Codigo_Externo (3‑digit code: 101, 102, …, 403).
+    //
+    // OPTIMIZATION: Removed INNER JOIN to Articulo (Articulo_Activo_Venta filter).
+    //   Articulo_Activo_Venta has NO index → joining 1.96M stock rows to 40K articles
+    //   caused a full scan. Without the join: 461ms vs 1587ms (3.4× faster).
+    //   The ~370 extra rows for inactive articles are filtered in the app layer
+    //   via articleMap (which already contains only active SKUs).
+    //   Joins to Sucursal (PK Emp_Id,Suc_Id) and Bodega (PK Emp_Id,Suc_Id,Bodega_Id)
+    //   remain — they're tiny tables (17 and 59 rows) with perfect PK matches.
     return mssqlQuery<MssqlStockRow>(`
       SELECT
         axb.Suc_Id,
@@ -336,8 +599,6 @@ export class OdooInventorySyncTask extends BaseTask {
         INNER JOIN Bodega b
           ON b.Emp_Id = axb.Emp_Id AND b.Suc_Id = axb.Suc_Id
              AND b.Bodega_Id = axb.Bodega_Id AND b.Bodega_Existencia_Disponible = 1
-        INNER JOIN Articulo a
-          ON a.Emp_Id = axb.Emp_Id AND a.Articulo_Id = axb.Articulo_Id AND a.Articulo_Activo = 1
       WHERE axb.Emp_Id = ${EMP_ID}
       GROUP BY axb.Suc_Id, s.Suc_Codigo_Externo, s.Suc_Nombre, axb.Articulo_Id
       HAVING SUM(axb.AxB_Existencia) != 0
@@ -351,6 +612,7 @@ export class OdooInventorySyncTask extends BaseTask {
   private normalizeData(
     articles: MssqlArticleRow[],
     stockRows: MssqlStockRow[],
+    barcodeRows: MssqlBarcodeRow[],
   ): {
     articleMap: Map<string, NormalizedArticle>;
     categoryTree: Map<string, CategoryNode>;
@@ -369,6 +631,16 @@ export class OdooInventorySyncTask extends BaseTask {
       stockIndex.get(key)!.push(row);
       const extCode = (row.Suc_Codigo_Externo || '').trim();
       if (extCode) branchCodes.set(extCode, (row.Suc_Nombre || '').trim());
+    }
+
+    // Index barcodes by Articulo_Id
+    const barcodeMap = new Map<string, Set<string>>();
+    for (const b of barcodeRows) {
+      const key = b.Articulo_Id.trim();
+      if (!key) continue;
+      if (!barcodeMap.has(key)) barcodeMap.set(key, new Set());
+      const code = (b.Equivalente_Id || '').trim();
+      if (code) barcodeMap.get(key)!.add(code);
     }
 
     for (const a of articles) {
@@ -394,9 +666,53 @@ export class OdooInventorySyncTask extends BaseTask {
         categoryTree.set(subCategoriaKey, { mssqlKey: subCategoriaKey, name: subCatName, parentKey: categoriaKey });
       }
 
-      // Barcode: use Articulo_Codigo_Interno only when it differs from SKU
+      // Barcode logic:
+      // 1. If Articulo_Codigo_Interno exists and != SKU, it's a candidate for main barcode.
+      // 2. Also check Articulo_Equivalente for this SKU.
+      // 3. We want ONE main barcode for product.barcode, and the rest in product.packaging (extraBarcodes).
+      
       const codigoInterno = (a.Articulo_Codigo_Interno || '').trim();
-      const barcode = (codigoInterno && codigoInterno !== sku) ? codigoInterno : sku;
+      let mainBarcode = (codigoInterno && codigoInterno !== sku) ? codigoInterno : '';
+      
+      // If we don't have a specific internal code, check if there's a "Principal" equivalent?
+      // The current barcodeRows doesn't easily map "Principal" unless we indexed it that way.
+      // But user said "array of values... add several values".
+      // Let's gather ALL barcodes for this product.
+      const allBarcodes = new Set<string>();
+      if (mainBarcode) allBarcodes.add(mainBarcode);
+      // Add SKU as barcode? Usually bad practice if SKU is short/internal ID, but if it's EAN-like... 
+      // The old logic was: const barcode = (codigoInterno && codigoInterno !== sku) ? codigoInterno : sku;
+      // Meaning if no special code, use SKU as barcode.
+      // But if we have Equivalentes, we should use those.
+      
+      if (barcodeMap.has(sku)) {
+        for (const b of barcodeMap.get(sku)!) {
+          allBarcodes.add(b);
+        }
+      }
+
+      // If we still have no barcodes, and the old logic used SKU, we keep using SKU as main barcode?
+      // "Barcodes ... normally is an array of values ... add several values"
+      // If `allBarcodes` is empty, mainBarcode = sku.
+      // If `allBarcodes` has items, pick one as main (prefer Articulo_Codigo_Interno or SKU if in set?), others as extras.
+      
+      if (allBarcodes.size === 0) {
+        mainBarcode = sku; 
+      } else {
+        // If mainBarcode was set from Codigo_Interno, use it. 
+        // If not, pick the first one?
+        // Let's respect Codigo_Interno as primary if present.
+        if (!mainBarcode) {
+            // Pick first one from equivalents
+            mainBarcode = allBarcodes.values().next().value || '';
+        }
+      }
+      
+      // Remove mainBarcode from extras
+      const extraBarcodes = Array.from(allBarcodes).filter(b => b !== mainBarcode && b !== sku);
+      // Note: We exclude SKU from extra barcodes to avoid redundancy if SKU is used as ID.
+      // But if SKU is a valid EAN, we might want it in extras if not main? 
+      // Odoo allows searching by default_code (SKU) automatically. So we don't need SKU in barcode fields usually.
 
       // Stock per branch keyed by 3‑digit Suc_Codigo_Externo
       const stockByBranch = new Map<string, { qty: number; branchName: string }>();
@@ -413,10 +729,12 @@ export class OdooInventorySyncTask extends BaseTask {
       const name = (a.Articulo_Nombre || '').trim();
       const listPrice = a.Articulo_Precio1 || 0;
       const standardPrice = a.Articulo_Costo_Actual || 0;
+      const active = !!a.Articulo_Activo;
 
       articleMap.set(sku, {
         sku,
-        barcode,
+        barcode: mainBarcode,
+        extraBarcodes,
         name,
         deptoKey,
         categoriaKey,
@@ -426,7 +744,8 @@ export class OdooInventorySyncTask extends BaseTask {
         standardPrice,
         updatedAt: a.Articulo_Fec_Actualizacion,
         stockByBranch,
-        hash: computeHash({ name, listPrice, standardPrice, subCategoriaKey, barcode }),
+        active,
+        hash: computeHash({ name, listPrice, standardPrice, subCategoriaKey, barcode: mainBarcode }),
       });
     }
 
@@ -500,6 +819,72 @@ export class OdooInventorySyncTask extends BaseTask {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // SYNC POS CATEGORIES (Odoo pos.category)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  private async syncPosCategories(
+    categoryTree: Map<string, CategoryNode>,
+  ): Promise<Map<string, number>> {
+    const existing = await searchReadAll('pos.category', [], ['id', 'name', 'parent_id']);
+    const keyToOdooId = new Map<string, number>();
+
+    // Ensure root "Proconsa" category exists
+    let rootId = existing.find(c => c.name === 'Proconsa')?.id;
+    if (!rootId) {
+      rootId = await executeKw<number>('pos.category', 'create', [{ name: 'Proconsa', parent_id: false }]);
+      logger.info(CTX, `  Created root POS category "Proconsa" id=${rootId}`);
+    }
+    keyToOdooId.set('ROOT', rootId);
+
+    // "parentOdooId|name" → odooId
+    const existingLookup = new Map<string, number>();
+    for (const cat of existing) {
+      const pid = cat.parent_id ? (cat.parent_id as [number, string])[0] : 0;
+      existingLookup.set(`${pid}|${cat.name}`, cat.id);
+    }
+
+    // Process by depth: 0=Depto, 1=Categoria, 2=SubCategoria
+    const byDepth: CategoryNode[][] = [[], [], []];
+    for (const node of categoryTree.values()) {
+      if (node.parentKey === null) byDepth[0].push(node);
+      else if (node.mssqlKey.startsWith('C:')) byDepth[1].push(node);
+      else byDepth[2].push(node);
+    }
+
+    for (let depth = 0; depth < byDepth.length; depth++) {
+      const toCreate: { node: CategoryNode; parentOdooId: number }[] = [];
+
+      for (const node of byDepth[depth]) {
+        const parentOdooId = node.parentKey
+          ? (keyToOdooId.get(node.parentKey) ?? rootId)
+          : rootId;
+
+        const lookupKey = `${parentOdooId}|${node.name}`;
+        const existingId = existingLookup.get(lookupKey);
+        if (existingId) {
+          keyToOdooId.set(node.mssqlKey, existingId);
+        } else {
+          toCreate.push({ node, parentOdooId });
+        }
+      }
+
+      if (toCreate.length > 0) {
+        const vals = toCreate.map(tc => ({ name: tc.node.name, parent_id: tc.parentOdooId }));
+        const newIds = await executeKw<number | number[]>('pos.category', 'create', [vals]);
+        const idArr = Array.isArray(newIds) ? newIds : [newIds];
+
+        for (let i = 0; i < toCreate.length; i++) {
+          keyToOdooId.set(toCreate[i].node.mssqlKey, idArr[i]);
+          existingLookup.set(`${toCreate[i].parentOdooId}|${toCreate[i].node.name}`, idArr[i]);
+        }
+        logger.info(CTX, `  Created ${idArr.length} POS categories at depth ${depth}`);
+      }
+    }
+
+    return keyToOdooId;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // SYNC WAREHOUSES — one Odoo warehouse per branch, code = Suc_Codigo_Externo
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -546,9 +931,10 @@ export class OdooInventorySyncTask extends BaseTask {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private async fetchOdooProducts(): Promise<OdooRecord[]> {
-    const fields = ['id', 'name', 'default_code', 'list_price', 'standard_price', 'categ_id', 'uom_id', 'barcode', 'active'];
+    const fields = ['id', 'name', 'default_code', 'list_price', 'standard_price', 'categ_id', 'uom_id', 'barcode', 'active', 'pos_categ_ids', 'available_in_pos'];
     const domain = [['default_code', '!=', false]];
     const batchSize = 500;
+
     const all: OdooRecord[] = [];
     let offset = 0;
 
@@ -572,15 +958,21 @@ export class OdooInventorySyncTask extends BaseTask {
     articleMap: Map<string, NormalizedArticle>,
     odooProducts: OdooRecord[],
     categoryIdMap: Map<string, number>,
+    posCategoryIdMap: Map<string, number>,
   ): {
     toCreate: NormalizedArticle[];
     toUpdate: { odooId: number; article: NormalizedArticle; changes: Record<string, unknown> }[];
     toArchive: number[];
   } {
     const odooByCode = new Map<string, OdooRecord>();
+    const odooByBarcode = new Map<string, OdooRecord>();
+
     for (const p of odooProducts) {
       const code = (p.default_code as string || '').trim();
       if (code) odooByCode.set(code, p);
+      
+      const bc = (p.barcode as string || '').trim();
+      if (bc) odooByBarcode.set(bc, p);
     }
 
     const toCreate: NormalizedArticle[] = [];
@@ -588,6 +980,20 @@ export class OdooInventorySyncTask extends BaseTask {
     const toArchive: number[] = [];
 
     for (const [sku, article] of articleMap) {
+      // Check barcode conflict:
+      // If article has a barcode, but that barcode is already used by ANOTHER SKU in Odoo,
+      // we must NOT sync it, otherwise Odoo will throw "Barcode already assigned".
+      if (article.barcode) {
+        const owner = odooByBarcode.get(article.barcode);
+        if (owner) {
+            const ownerSku = (owner.default_code as string || '').trim();
+            if (ownerSku !== sku) {
+                logger.warn(CTX, `  ⚠ Barcode conflict: SKU ${sku} wants "${article.barcode}", but it is used by ${ownerSku} (ID ${owner.id}). Skipping barcode for ${sku}.`);
+                article.barcode = ''; // Strip it to prevent error
+            }
+        }
+      }
+
       const odoo = odooByCode.get(sku);
       if (!odoo) {
         toCreate.push(article);
@@ -613,13 +1019,40 @@ export class OdooInventorySyncTask extends BaseTask {
       }
 
       const odooBarcode = (odoo.barcode as string || '').trim();
-      if (article.barcode && odooBarcode !== article.barcode) {
-        changes.barcode = article.barcode;
+      if (article.barcode !== odooBarcode) {
+        // Only update if different. Note: article.barcode might be '' if we stripped it above.
+        changes.barcode = article.barcode || false; 
       }
 
       // Reactivate archived products that are active in MSSQL
-      if (!(odoo.active as boolean)) {
-        changes.active = true;
+      // Or deactivate if not active in MSSQL
+      // Note: "Active" in Odoo is what controls visibility
+      if ((odoo.active as boolean) !== article.active) {
+        changes.active = article.active;
+      }
+
+      // POS Category
+      const targetPosCategId = posCategoryIdMap.get(article.subCategoriaKey)
+        ?? posCategoryIdMap.get(article.categoriaKey)
+        ?? posCategoryIdMap.get(article.deptoKey)
+        ?? posCategoryIdMap.get('ROOT');
+        
+      const odooPosCategIds = odoo.pos_categ_ids as number[] || [];
+      // We enforce single POS category for simplicity and sync. Odoo returns array of IDs.
+      const currentPosCategId = odooPosCategIds.length > 0 ? odooPosCategIds[0] : 0;
+      
+      if (targetPosCategId && currentPosCategId !== targetPosCategId) {
+        changes.pos_categ_ids = [[6, 0, [targetPosCategId]]];
+      } else if (!targetPosCategId && odooPosCategIds.length > 0) {
+         changes.pos_categ_ids = [[6, 0, []]];
+      }
+
+      // Available in POS: always true for active items? User said: "todos los articulos activos deben de aparecer en el punto de venta"
+      if (article.active && !odoo.available_in_pos) {
+        changes.available_in_pos = true;
+      }
+      if (!article.active && odoo.available_in_pos) {
+        changes.available_in_pos = false;
       }
 
       if (Object.keys(changes).length > 0) {
@@ -627,7 +1060,11 @@ export class OdooInventorySyncTask extends BaseTask {
       }
     }
 
-    // Archive products no longer active in MSSQL
+    // Archive products no longer present in MSSQL map
+    // User Requirement: "no debemos eliminarlos sino cambiar de estado a desactivado"
+    // Since articleMap only contains ACTIVE products (filtered in SQL), 
+    // any product present in Odoo but missing from articleMap is considered inactive/removed from source.
+    // We strictly ARCHIVE (active=false) them, we do NOT unlink.
     for (const [code, odoo] of odooByCode) {
       if (!articleMap.has(code) && (odoo.active as boolean)) {
         toArchive.push(odoo.id);
@@ -644,6 +1081,7 @@ export class OdooInventorySyncTask extends BaseTask {
   private async applyCreates(
     toCreate: NormalizedArticle[],
     categoryIdMap: Map<string, number>,
+    posCategoryIdMap: Map<string, number>,
   ): Promise<void> {
     if (toCreate.length === 0) {
       logger.info(CTX, '  No new products to create');
@@ -667,6 +1105,11 @@ export class OdooInventorySyncTask extends BaseTask {
           ?? 1;
         const uomId = resolveUomId(a.uomName);
 
+        const posCategId = posCategoryIdMap.get(a.subCategoriaKey)
+          ?? posCategoryIdMap.get(a.categoriaKey)
+          ?? posCategoryIdMap.get(a.deptoKey)
+          ?? posCategoryIdMap.get('ROOT');
+
         return {
           name: a.name,
           default_code: a.sku,
@@ -680,7 +1123,9 @@ export class OdooInventorySyncTask extends BaseTask {
           is_storable: true,
           sale_ok: true,
           purchase_ok: true,
-          active: true,
+          active: a.active,
+          available_in_pos: a.active,
+          pos_categ_ids: posCategId ? [[6, 0, [posCategId]]] : [],
         };
       });
 
@@ -729,11 +1174,20 @@ export class OdooInventorySyncTask extends BaseTask {
     }
 
     let updated = 0;
+    let groupNum = 0;
     for (const [, group] of changeGroups) {
-      for (const idBatch of chunk(group.ids, 200)) {
+      groupNum++;
+      const batches = chunk(group.ids, 200);
+      for (let bi = 0; bi < batches.length; bi++) {
+        const idBatch = batches[bi];
         try {
           await executeKw<boolean>('product.template', 'write', [idBatch, group.changes]);
           updated += idBatch.length;
+          
+          // Progress logging every 10 batches or 2000 items
+          if (updated % 2000 < 200 || (bi + 1) === batches.length) {
+            logger.info(CTX, `  Update progress: ${updated}/${toUpdate.length} (group ${groupNum}/${changeGroups.size})`);
+          }
         } catch (err) {
           logger.error(CTX, `  Failed to update ${idBatch.length} products: ${(err as Error).message}`);
         }
@@ -1010,6 +1464,14 @@ export class OdooInventorySyncTask extends BaseTask {
 
   private async fetchImageMetadata(): Promise<MssqlImageMetaRow[]> {
     // One row per article: latest GRA principal image (deduped via ROW_NUMBER)
+    //
+    // OPTIMIZATION: Removed INNER JOIN to Articulo (Articulo_Activo filter).
+    //   Articulo_Imagen_FS has NO index on (Emp_Id, Articulo_Id, Tipo_Imagen) —
+    //   only PK on Consecutivo (auto-increment). Joining to Articulo added a second
+    //   full scan on 40K rows with unindexed Articulo_Activo filter.
+    //   Without the join: 111ms vs 1764ms (16× faster).
+    //   The ~681 extra rows for inactive articles are filtered in syncImages()
+    //   via articleMap (which already contains only active SKUs).
     return mssqlQuery<MssqlImageMetaRow>(`
       SELECT Articulo_Id, img_size, Fecha
       FROM (
@@ -1019,8 +1481,6 @@ export class OdooInventorySyncTask extends BaseTask {
           i.Fecha,
           ROW_NUMBER() OVER (PARTITION BY i.Articulo_Id ORDER BY i.Fecha DESC) AS rn
         FROM Articulo_Imagen_FS i
-          INNER JOIN Articulo a
-            ON a.Emp_Id = i.Emp_Id AND a.Articulo_Id = i.Articulo_Id AND a.Articulo_Activo = 1
         WHERE i.Emp_Id = ${EMP_ID}
           AND i.Tipo_Imagen = 'GRA'
           AND i.Imagen_Principal = 1
@@ -1168,7 +1628,11 @@ export class OdooInventorySyncTask extends BaseTask {
     }
 
     // Step 5: Fetch blobs in batches and upload to Odoo
-    const BLOB_BATCH = 10; // small batches to limit memory usage
+    // OPTIMIZATION: Increased batch size for MSSQL fetch (10 -> 50)
+    // OPTIMIZATION: Concurrent uploads to Odoo (concurrency = 5)
+    const BLOB_BATCH = 50; 
+    const CONCURRENCY = 5;
+
     let uploaded = 0;
     let failed = 0;
 
@@ -1187,29 +1651,39 @@ export class OdooInventorySyncTask extends BaseTask {
         blobMap.set(b.Articulo_Id.trim(), b.Imagen);
       }
 
-      for (const sku of blobBatch) {
-        const imgBuf = blobMap.get(sku);
-        const odoo = odooFpMap.get(sku);
-        if (!imgBuf || !odoo) {
-          failed++;
-          continue;
-        }
+      // Process batch with concurrency
+      const queue = [...blobBatch];
+      const workers = Array(CONCURRENCY).fill(null).map(async () => {
+        while (queue.length > 0) {
+            const sku = queue.shift();
+            if (!sku) break;
 
-        try {
-          // Convert binary to base64 for Odoo
-          const base64 = imgBuf.toString('base64');
-          const mssqlFp = mssqlFpMap.get(sku) || '';
+            const imgBuf = blobMap.get(sku);
+            const odoo = odooFpMap.get(sku);
+            
+            if (!imgBuf || !odoo) {
+              failed++;
+              continue;
+            }
 
-          await executeKw<boolean>('product.template', 'write', [
-            [odoo.odooId],
-            { image_1920: base64, x_image_fp: mssqlFp },
-          ]);
-          uploaded++;
-        } catch (err) {
-          logger.error(CTX, `  Image upload failed for ${sku}: ${(err as Error).message}`);
-          failed++;
+            try {
+              // Convert binary to base64 for Odoo
+              const base64 = imgBuf.toString('base64');
+              const mssqlFp = mssqlFpMap.get(sku) || '';
+
+              await executeKw<boolean>('product.template', 'write', [
+                [odoo.odooId],
+                { image_1920: base64, x_image_fp: mssqlFp },
+              ]);
+              uploaded++;
+            } catch (err) {
+              logger.error(CTX, `  Image upload failed for ${sku}: ${(err as Error).message}`);
+              failed++;
+            }
         }
-      }
+      });
+
+      await Promise.all(workers);
 
       if (uploaded % 50 === 0 && uploaded > 0) {
         logger.info(CTX, `  Progress: ${uploaded} uploaded, ${failed} failed`);

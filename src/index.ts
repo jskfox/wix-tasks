@@ -25,7 +25,8 @@ async function main(): Promise<void> {
   registerTask(new AbandonedCartsTask());
   registerTask(new OdooChatAnalysisTask());
   registerTask(new OdooChatLeadsTask());
-  registerTask(new OdooInventorySyncTask());
+  registerTask(new OdooInventorySyncTask('full'));       // Daily at 4:00 AM
+  registerTask(new OdooInventorySyncTask('stock-only')); // Every hour at :15
 
   // Start the scheduler
   startAll();

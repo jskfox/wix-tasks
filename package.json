@@ -8,7 +8,9 @@
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "sync": "ts-node src/run-sync.ts",
-    "sync:dry": "DRY_RUN=1 ts-node src/run-sync.ts"
+    "sync:dry": "DRY_RUN=1 ts-node src/run-sync.ts",
+    "sync:stock": "ts-node src/run-sync.ts --stock-only",
+    "sync:stock:dry": "DRY_RUN=1 ts-node src/run-sync.ts --stock-only"
   },
   "engines": {
     "node": ">=20"

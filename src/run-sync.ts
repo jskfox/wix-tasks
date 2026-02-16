@@ -2,8 +2,10 @@
  * Manual runner for OdooInventorySyncTask.
  *
  * Usage:
- *   npx ts-node src/run-sync.ts              # full run (writes to Odoo)
- *   DRY_RUN=1 npx ts-node src/run-sync.ts    # dry run (read-only, logs diff)
+ *   npx ts-node src/run-sync.ts                        # full sync (writes to Odoo)
+ *   npx ts-node src/run-sync.ts --stock-only           # stock-only sync (lightweight)
+ *   DRY_RUN=1 npx ts-node src/run-sync.ts              # full sync dry run
+ *   DRY_RUN=1 npx ts-node src/run-sync.ts --stock-only # stock-only dry run
  *
  * Useful for:
  *   - Debugging before deploying
@@ -12,16 +14,18 @@
  */
 
 import { closeMssqlPool } from './services/mssql';
-import { OdooInventorySyncTask } from './tasks/odoo-inventory-sync';
+import { OdooInventorySyncTask, SyncMode } from './tasks/odoo-inventory-sync';
 import { logger } from './utils/logger';
 
 const CTX = 'RunSync';
 
 async function main(): Promise<void> {
-  const task = new OdooInventorySyncTask();
+  const mode: SyncMode = process.argv.includes('--stock-only') ? 'stock-only' : 'full';
+  const task = new OdooInventorySyncTask(mode);
 
   logger.info(CTX, '═══════════════════════════════════════════════════');
   logger.info(CTX, ` Manual run: ${task.name}`);
+  logger.info(CTX, ` Mode:       ${task.syncMode}`);
   logger.info(CTX, ` Dry run:    ${task.dryRun ? 'YES' : 'NO'}`);
   logger.info(CTX, '═══════════════════════════════════════════════════');
 
