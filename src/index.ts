@@ -3,6 +3,7 @@ import { logger } from './utils/logger';
 import { registerTask, startAll, stopAll } from './scheduler';
 import { closePool } from './services/database';
 import { closeMssqlPool } from './services/mssql';
+import { startAdminServer } from './admin/server';
 
 // ── Tasks ────────────────────────────────────────────────────────────────────
 import { PriceInventorySyncTask } from './tasks/price-inventory-sync';
@@ -30,6 +31,9 @@ async function main(): Promise<void> {
 
   // Start the scheduler
   startAll();
+
+  // Start admin dashboard
+  startAdminServer();
 
   logger.info(CTX, 'Scheduler running. Press Ctrl+C to stop.');
 }

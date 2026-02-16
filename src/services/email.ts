@@ -27,6 +27,12 @@ export interface SendEmailOptions {
   subject: string;
   html: string;
   text?: string;
+  attachments?: Array<{
+    filename?: string;
+    path?: string;
+    content?: string | Buffer;
+    contentType?: string;
+  }>;
 }
 
 export async function sendEmail(options: SendEmailOptions): Promise<void> {
@@ -41,6 +47,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
     subject: options.subject,
     html: options.html,
     text: options.text,
+    attachments: options.attachments,
   });
 
   logger.info(CTX, `Email sent: ${info.messageId}`);

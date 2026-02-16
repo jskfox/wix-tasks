@@ -20,6 +20,7 @@ interface PriceChangeRow {
 
 export class PriceInventorySyncTask extends BaseTask {
   readonly name = 'price-inventory-sync';
+  readonly description = 'Sincroniza cambios de precios e inventario desde PostgreSQL hacia la tienda Wix. Detecta cambios recientes y actualiza variantes de producto.';
   // Every hour at minute 5 and 35 (Pacific)
   readonly cronExpression = '5,35 * * * *';
 

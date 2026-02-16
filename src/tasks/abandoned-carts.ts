@@ -8,6 +8,7 @@ const CTX = 'AbandonedCarts';
 
 export class AbandonedCartsTask extends BaseTask {
   readonly name = 'abandoned-carts-report';
+  readonly description = 'Genera y envía por correo un reporte diario de carritos abandonados en la tienda Wix. Incluye detalles del cliente, productos y montos.';
   // Every day at 10:00 PM Pacific
   readonly cronExpression = '0 22 * * *';
 

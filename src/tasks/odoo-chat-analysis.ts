@@ -91,6 +91,7 @@ interface AnalysisResult {
 
 export class OdooChatAnalysisTask extends BaseTask {
   readonly name = 'odoo-chat-analysis';
+  readonly description = 'Analiza conversaciones del livechat de Odoo semanalmente. Clasifica intenciones de compra, detecta productos solicitados y genera reporte por correo.';
   // Every Monday at 7:00 AM Pacific
   readonly cronExpression = '0 7 * * 1';
 
@@ -168,11 +169,34 @@ export class OdooChatAnalysisTask extends BaseTask {
     // ── 6. Send email summary ──────────────────────────────────────────────
     if (config.marketingEmails.length > 0) {
       const html = this.buildEmailHtml(analysis);
+      const attachments = [
+        {
+          filename: 'chat_conversaciones_detalle.csv',
+          path: path.join(reportsDir, 'chat_conversaciones_detalle.csv'),
+          contentType: 'text/csv',
+        },
+        {
+          filename: 'chat_emails_capturados.csv',
+          path: path.join(reportsDir, 'chat_emails_capturados.csv'),
+          contentType: 'text/csv',
+        },
+        {
+          filename: 'chat_metricas.csv',
+          path: path.join(reportsDir, 'chat_metricas.csv'),
+          contentType: 'text/csv',
+        },
+        {
+          filename: 'REPORTE_EJECUTIVO_CHAT.md',
+          path: mdPath,
+          contentType: 'text/markdown',
+        },
+      ];
       await sendEmail({
         to: config.marketingEmails,
         subject: `📊 Reporte Semanal Chat proconsa.online — ${analysis.totalSessions} sesiones`,
         html,
         text: `Reporte semanal: ${analysis.totalSessions} sesiones, ${analysis.emailsCaptured.length} emails capturados`,
+        attachments,
       });
       logger.info(CTX, `Email sent to ${config.marketingEmails.length} recipient(s)`);
     }

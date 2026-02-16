@@ -101,6 +101,25 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientXmlRpcError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    msg.includes("unknown xml-rpc tag 'title'")
+    || msg.includes('socket hang up')
+    || msg.includes('econnreset')
+    || msg.includes('econnrefused')
+    || msg.includes('etimedout')
+    || msg.includes('timeout')
+    || msg.includes('502')
+    || msg.includes('503')
+    || msg.includes('504')
+  );
+}
+
 // ── UOM name → Odoo uom.uom id ──────────────────────────────────────────────
 const UOM_NAME_MAP: Record<string, number> = {
   'PIEZA': 1,     'SIN DEFINIR': 1,
@@ -136,6 +155,7 @@ export type SyncMode = 'full' | 'stock-only';
 
 export class OdooInventorySyncTask extends BaseTask {
   readonly name: string;
+  readonly description: string;
   readonly cronExpression: string;
   readonly syncMode: SyncMode;
 
@@ -147,9 +167,11 @@ export class OdooInventorySyncTask extends BaseTask {
     this.syncMode = mode;
     if (mode === 'stock-only') {
       this.name = 'odoo-inventory-sync-stock';
+      this.description = 'Sincronización rápida de existencias desde MSSQL (ERP) hacia Odoo. Solo actualiza cantidades de stock por sucursal/bodega sin tocar productos ni imágenes.';
       this.cronExpression = '15 * * * *';   // Every hour at :15
     } else {
       this.name = 'odoo-inventory-sync-full';
+      this.description = 'Sincronización completa de inventario desde MSSQL (ERP) hacia Odoo. Incluye productos, categorías, precios, stock por sucursal, imágenes y códigos de barras.';
       this.cronExpression = '0 4 * * *';    // Daily at 4:00 AM
     }
   }
@@ -1397,6 +1419,8 @@ export class OdooInventorySyncTask extends BaseTask {
     // But we CAN batch the action_apply_inventory call after individual writes.
     // Strategy: write in parallel batches, then apply inventory in batch.
     const UPDATE_BATCH = 100;
+    const WRITE_CONCURRENCY = Math.max(1, parseInt(process.env.ODOO_STOCK_WRITE_CONCURRENCY || '12', 10));
+    const WRITE_MAX_RETRIES = Math.max(1, parseInt(process.env.ODOO_STOCK_WRITE_RETRIES || '3', 10));
     const updateBatches = chunk(toUpdate, UPDATE_BATCH);
     logger.info(CTX, `  Updating ${toUpdate.length} quants in ${updateBatches.length} batches...`);
 
@@ -1404,37 +1428,83 @@ export class OdooInventorySyncTask extends BaseTask {
       const batch = updateBatches[bi];
       const successIds: number[] = [];
 
-      // Write each quant's inventory_quantity (parallel within batch)
-      const writePromises = batch.map(async (u) => {
-        try {
-          await executeKw<boolean>('stock.quant', 'write', [
-            [u.existingQuantId!],
-            { inventory_quantity: u.qty },
-          ]);
-          return u.existingQuantId!;
-        } catch (err) {
-          logger.error(CTX, `  Write error quant=${u.existingQuantId}: ${(err as Error).message}`);
-          return null;
-        }
-      });
+      // Write each quant's inventory_quantity with controlled concurrency + retry.
+      // This avoids overloading Odoo/proxy and mitigates transient HTML responses
+      // (e.g. "Unknown XML-RPC tag 'TITLE'").
+      const queue = [...batch];
+      const workers = Array.from({ length: WRITE_CONCURRENCY }, () => (async () => {
+        while (queue.length > 0) {
+          const u = queue.shift();
+          if (!u) break;
 
-      const results = await Promise.all(writePromises);
-      for (const id of results) {
-        if (id !== null) successIds.push(id);
-        else stockErrors++;
-      }
+          let ok = false;
+          for (let attempt = 1; attempt <= WRITE_MAX_RETRIES; attempt++) {
+            try {
+              await executeKw<boolean>('stock.quant', 'write', [
+                [u.existingQuantId!],
+                { inventory_quantity: u.qty },
+              ]);
+              successIds.push(u.existingQuantId!);
+              ok = true;
+              break;
+            } catch (err) {
+              if (attempt < WRITE_MAX_RETRIES && isTransientXmlRpcError(err)) {
+                const waitMs = 250 * attempt;
+                logger.warn(
+                  CTX,
+                  `  Transient write error quant=${u.existingQuantId} (attempt ${attempt}/${WRITE_MAX_RETRIES}): ${(err as Error).message} — retrying in ${waitMs}ms`,
+                );
+                await sleep(waitMs);
+                continue;
+              }
+              logger.error(CTX, `  Write error quant=${u.existingQuantId}: ${(err as Error).message}`);
+              stockErrors++;
+              break;
+            }
+          }
+
+          if (!ok) {
+            // already counted in stockErrors
+          }
+        }
+      })());
+
+      await Promise.all(workers);
 
       // Batch apply inventory for all successful writes
       if (successIds.length > 0) {
-        try {
-          await executeKw<boolean>('stock.quant', 'action_apply_inventory', [successIds]);
-        } catch (applyErr) {
-          if (!(applyErr as Error).message?.includes('cannot marshal None')) {
+        let applyOk = false;
+        for (let attempt = 1; attempt <= WRITE_MAX_RETRIES; attempt++) {
+          try {
+            await executeKw<boolean>('stock.quant', 'action_apply_inventory', [successIds]);
+            applyOk = true;
+            break;
+          } catch (applyErr) {
+            // Odoo 18 may return None here; treat that as success.
+            if ((applyErr as Error).message?.includes('cannot marshal None')) {
+              applyOk = true;
+              break;
+            }
+
+            if (attempt < WRITE_MAX_RETRIES && isTransientXmlRpcError(applyErr)) {
+              const waitMs = 250 * attempt;
+              logger.warn(
+                CTX,
+                `  Transient apply error (attempt ${attempt}/${WRITE_MAX_RETRIES}): ${(applyErr as Error).message} — retrying in ${waitMs}ms`,
+              );
+              await sleep(waitMs);
+              continue;
+            }
+
             logger.error(CTX, `  Batch apply error: ${(applyErr as Error).message}`);
-            stockErrors += successIds.length;
+            break;
           }
         }
-        stockUpdated += successIds.length;
+        if (applyOk) {
+          stockUpdated += successIds.length;
+        } else {
+          stockErrors += successIds.length;
+        }
       }
 
       if ((bi + 1) % 10 === 0 || bi === updateBatches.length - 1) {

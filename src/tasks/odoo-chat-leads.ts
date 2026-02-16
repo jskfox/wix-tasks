@@ -150,6 +150,7 @@ function suggestApproach(intents: Set<string>, products: Set<string>, clientType
 
 export class OdooChatLeadsTask extends BaseTask {
   readonly name = 'odoo-chat-leads-report';
+  readonly description = 'Genera reporte diario de leads potenciales desde el livechat de Odoo. Prioriza por intención de compra y envía resumen por correo al equipo de marketing.';
   // Every day at 8:00 AM Pacific
   readonly cronExpression = '0 8 * * *';
 
@@ -350,11 +351,34 @@ export class OdooChatLeadsTask extends BaseTask {
     if (config.marketingEmails.length > 0) {
       const priorityCounts = this.countByPriority(leadsWithEmail);
       const html = this.buildEmailHtml(leadsWithEmail, priorityCounts, now);
+      const attachments = [
+        {
+          filename: 'LEADS_SEGUIMIENTO_MARKETING.csv',
+          path: path.join(reportsDir, 'LEADS_SEGUIMIENTO_MARKETING.csv'),
+          contentType: 'text/csv',
+        },
+        {
+          filename: 'LEADS_CONVERSACIONES_COMPLETAS.csv',
+          path: path.join(reportsDir, 'LEADS_CONVERSACIONES_COMPLETAS.csv'),
+          contentType: 'text/csv',
+        },
+        {
+          filename: 'LEADS_SIN_EMAIL_OPORTUNIDADES.csv',
+          path: path.join(reportsDir, 'LEADS_SIN_EMAIL_OPORTUNIDADES.csv'),
+          contentType: 'text/csv',
+        },
+        {
+          filename: 'REPORTE_SEGUIMIENTO_MARKETING.md',
+          path: mdPath,
+          contentType: 'text/markdown',
+        },
+      ];
       await sendEmail({
         to: config.marketingEmails,
         subject: `🎯 Leads del Chat — ${leadsWithEmail.length} prospectos (${priorityCounts['🔴 MÁXIMA'] || 0} urgentes)`,
         html,
         text: `Reporte de leads: ${leadsWithEmail.length} con email, ${priorityCounts['🔴 MÁXIMA'] || 0} prioridad máxima`,
+        attachments,
       });
       logger.info(CTX, `Email sent to ${config.marketingEmails.length} recipient(s)`);
     }
