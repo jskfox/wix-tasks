@@ -1,5 +1,5 @@
 import { BaseTask } from './base-task';
-import { config } from '../config';
+import { config, getEmailsForTask } from '../config';
 import { logger } from '../utils/logger';
 import { sendEmail } from '../services/email';
 import { searchReadAll, searchRead, readRecords, OdooRecord } from '../services/odoo';
@@ -348,7 +348,8 @@ export class OdooChatLeadsTask extends BaseTask {
     logger.info(CTX, `Reports written to ${reportsDir}`);
 
     // ── 8. Email summary to marketing ──────────────────────────────────────
-    if (config.marketingEmails.length > 0) {
+    const recipients = getEmailsForTask('chatLeads');
+    if (recipients.length > 0) {
       const priorityCounts = this.countByPriority(leadsWithEmail);
       const html = this.buildEmailHtml(leadsWithEmail, priorityCounts, now);
       const attachments = [
@@ -374,13 +375,15 @@ export class OdooChatLeadsTask extends BaseTask {
         },
       ];
       await sendEmail({
-        to: config.marketingEmails,
+        to: recipients,
         subject: `🎯 Leads del Chat — ${leadsWithEmail.length} prospectos (${priorityCounts['🔴 MÁXIMA'] || 0} urgentes)`,
         html,
         text: `Reporte de leads: ${leadsWithEmail.length} con email, ${priorityCounts['🔴 MÁXIMA'] || 0} prioridad máxima`,
         attachments,
       });
-      logger.info(CTX, `Email sent to ${config.marketingEmails.length} recipient(s)`);
+      logger.info(CTX, `Email sent to ${recipients.length} recipient(s)`);
+    } else {
+      logger.warn(CTX, 'No email recipients configured (CHAT_LEADS_EMAILS or MARKETING_EMAILS) — skipping email send');
     }
   }
 

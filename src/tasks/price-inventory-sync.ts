@@ -3,96 +3,217 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 import { query } from '../services/database';
 import {
-  queryProductsBySku,
-  updateProductVariantPrice,
+  queryAllWixProducts,
   updateInventoryVariants,
+  WixProduct,
 } from '../services/wix-api';
+import { getSetting, setSetting } from '../services/settings-db';
 
 const CTX = 'PriceInventorySync';
+const WATERMARK_KEY = 'wix.price_inventory_sync.last_processed_timestamp';
 
-interface PriceChangeRow {
+interface StockSumRow {
   sku: string;
+  total_stock: string;
   precio: string;
-  existencia: string;
   nombre_corto: string;
-  precio_actualizado: string;
+  last_updated: string;
 }
 
 export class PriceInventorySyncTask extends BaseTask {
   readonly name = 'price-inventory-sync';
-  readonly description = 'Sincroniza cambios de precios e inventario desde PostgreSQL hacia la tienda Wix. Detecta cambios recientes y actualiza variantes de producto.';
+  readonly description = 'Sincroniza inventario desde PostgreSQL hacia Wix. Suma stock de sucursales filtradas por prefijo. Si el total < umbral, pone stock en 0.';
   // Every hour at minute 5 and 35 (Pacific)
   readonly cronExpression = '5,35 * * * *';
 
-  async execute(): Promise<void> {
-    const sucursal = config.sucursalWix;
-    logger.info(CTX, `Checking price/inventory changes for sucursal ${sucursal}...`);
+  // Optional limit for testing - set via constructor or runWithLimit()
+  private testLimit: number | null = null;
+  private forceLive: boolean = false;
 
-    // ── 1. Query recent price changes from PostgreSQL ────────────────────────
-    // Use a 35-minute window to ensure we catch everything between runs
-    const result = await query<PriceChangeRow>(
-      `SELECT sku, precio, existencia, nombre_corto, precio_actualizado
+  /**
+   * Run the sync with a specific limit of SKUs for testing.
+   * This allows testing in LIVE mode with only N products.
+   * @param limit Number of SKUs to process (e.g., 10 for testing)
+   */
+  async runWithLimit(limit: number): Promise<void> {
+    this.testLimit = limit;
+    this.forceLive = true; // Force LIVE mode when using limit
+    try {
+      await this.execute();
+    } finally {
+      this.testLimit = null;
+      this.forceLive = false;
+    }
+  }
+
+  async execute(): Promise<void> {
+    // When using testLimit, force LIVE mode regardless of config
+    const dryRun = this.forceLive ? false : config.wix.dryRun;
+    const minThreshold = config.wix.minStockThreshold;
+    const branchPrefix = config.wix.branchPrefix;
+
+    const modeLabel = dryRun ? '[DRY-RUN]' : (this.testLimit ? `[LIVE-TEST:${this.testLimit}]` : '[LIVE]');
+
+    if (this.testLimit) {
+      logger.info(CTX, `${modeLabel} TEST MODE: Will only process ${this.testLimit} SKUs`);
+    }
+
+    logger.info(CTX, `${modeLabel} Starting inventory sync (branches=${branchPrefix}*, threshold=${minThreshold})...`);
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // STEP 1: Get ALL products from Wix (with SKU and inventoryItemId)
+    // ══════════════════════════════════════════════════════════════════════════
+    const wixProducts = await queryAllWixProducts();
+
+    if (wixProducts.length === 0) {
+      logger.info(CTX, 'No products found in Wix store, nothing to sync');
+      return;
+    }
+
+    // Build a map of SKU → WixProduct for quick lookup
+    const wixProductMap = new Map<string, WixProduct>();
+    for (const product of wixProducts) {
+      if (product.sku) {
+        wixProductMap.set(product.sku, product);
+      }
+    }
+
+    const wixSkus = Array.from(wixProductMap.keys());
+    logger.info(CTX, `Found ${wixSkus.length} products with SKU in Wix`);
+
+    if (wixSkus.length === 0) {
+      logger.info(CTX, 'No products with SKU found in Wix, nothing to sync');
+      return;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // STEP 2: Query PostgreSQL for stock data of those SKUs
+    // ══════════════════════════════════════════════════════════════════════════
+    // Get watermark for incremental sync
+    const defaultWatermark = '1970-01-01T00:00:00.000Z';
+    const lastProcessed = getSetting(WATERMARK_KEY, defaultWatermark);
+
+    logger.info(CTX, `Watermark: processing changes since ${lastProcessed}`);
+
+    // Query stock for SKUs that exist in Wix AND have changes since watermark
+    // Build dynamic placeholders for IN clause: $3, $4, $5, ...
+    const skuPlaceholders = wixSkus.map((_, i) => `$${i + 3}`).join(', ');
+    const result = await query<StockSumRow>(
+      `SELECT 
+         sku,
+         SUM(existencia::numeric) as total_stock,
+         MAX(precio) as precio,
+         MAX(nombre_corto) as nombre_corto,
+         MAX(precio_actualizado) as last_updated
        FROM maestro_precios_sucursal
-       WHERE sucursal = $1
-         AND precio_actualizado >= NOW() - INTERVAL '35 minutes'
-       ORDER BY precio_actualizado DESC`,
-      [sucursal],
+       WHERE precio_actualizado > $1
+         AND sucursal::text LIKE $2
+         AND sku IN (${skuPlaceholders})
+       GROUP BY sku
+       ORDER BY MAX(precio_actualizado) DESC`,
+      [lastProcessed, `${branchPrefix}%`, ...wixSkus],
     );
 
     const changedRows = result.rows;
 
     if (changedRows.length === 0) {
-      logger.info(CTX, 'No price/inventory changes detected in the last 35 minutes');
+      logger.info(CTX, `No inventory changes detected for Wix SKUs since ${lastProcessed}`);
       return;
     }
 
-    logger.info(CTX, `Found ${changedRows.length} SKU(s) with recent changes`);
+    logger.info(CTX, `Found ${changedRows.length} SKU(s) with changes (out of ${wixSkus.length} Wix SKUs)`);
 
-    // ── 2. Log each changed SKU ──────────────────────────────────────────────
-    for (const row of changedRows) {
-      logger.info(CTX, `  SKU: ${row.sku} | Price: ${row.precio} | Stock: ${row.existencia} | Name: ${row.nombre_corto} | Updated: ${row.precio_actualizado}`);
+    // Apply test limit if set
+    let rowsToProcess = changedRows;
+    if (this.testLimit && changedRows.length > this.testLimit) {
+      rowsToProcess = changedRows.slice(0, this.testLimit);
+      logger.info(CTX, `${modeLabel} Limiting to ${this.testLimit} SKUs for testing (${changedRows.length - this.testLimit} skipped)`);
     }
 
-    // ── 3. Look up these SKUs in Wix to get product IDs ──────────────────────
-    const skus = changedRows.map(r => r.sku);
+    // ══════════════════════════════════════════════════════════════════════════
+    // STEP 3: Build stock map with threshold logic
+    // ══════════════════════════════════════════════════════════════════════════
+    const stockMap = new Map<string, { totalStock: number; effectiveStock: number; precio: number }>();
 
-    // TODO: UNCOMMENT WHEN READY FOR PRODUCTION — Wix read operation
-    // const wixProducts = await queryProductsBySku(skus);
-    // logger.info(CTX, `Matched ${wixProducts.length} Wix product(s) for ${skus.length} SKU(s)`);
-    logger.info(CTX, `[DRY-RUN] Would query Wix for ${skus.length} SKU(s): ${skus.join(', ')}`);
+    for (const row of rowsToProcess) {
+      const totalStock = parseFloat(row.total_stock) || 0;
+      // Apply threshold: if total < minThreshold, set effective stock to 0
+      const effectiveStock = totalStock < minThreshold ? 0 : Math.floor(totalStock);
+      const precio = parseFloat(row.precio) || 0;
 
-    // ── 4. Update prices and inventory in Wix ────────────────────────────────
-    // TODO: UNCOMMENT WHEN READY FOR PRODUCTION
-    // const skuToRow = new Map(changedRows.map(r => [r.sku, r]));
-    //
-    // for (const product of wixProducts) {
-    //   const productSku = product.sku;
-    //   if (!productSku) continue;
-    //
-    //   const row = skuToRow.get(productSku);
-    //   if (!row) continue;
-    //
-    //   const newPrice = parseFloat(row.precio);
-    //   const newStock = parseFloat(row.existencia);
-    //
-    //   // Update price
-    //   if (product.variants && product.variants.length > 0) {
-    //     const variantUpdates = product.variants.map(v => ({
-    //       choices: v.choices,
-    //       price: newPrice,
-    //     }));
-    //     await updateProductVariantPrice(product.id, variantUpdates);
-    //     logger.info(CTX, `Updated price for SKU ${productSku} → $${newPrice}`);
-    //   }
-    //
-    //   // Update inventory
-    //   const defaultVariantId = '00000000-0000-0000-0000-000000000000';
-    //   await updateInventoryVariants(product.id, true, [
-    //     { variantId: defaultVariantId, quantity: Math.floor(newStock) },
-    //   ]);
-    //   logger.info(CTX, `Updated inventory for SKU ${productSku} → ${Math.floor(newStock)} units`);
-    // }
+      stockMap.set(row.sku, { totalStock, effectiveStock, precio });
 
-    logger.info(CTX, `[DRY-RUN] Sync cycle complete. ${changedRows.length} SKU(s) would be synced to Wix.`);
+      const status = totalStock < minThreshold ? '⛔ BLOCKED' : '✓';
+      logger.debug(CTX, `  ${status} SKU: ${row.sku} | Total: ${totalStock.toFixed(0)} | Effective: ${effectiveStock}`);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // STEP 4: Update inventory in Wix
+    // ══════════════════════════════════════════════════════════════════════════
+    let updated = 0;
+    let blocked = 0;
+    let skipped = 0;
+    let errors = 0;
+
+    for (const [sku, stockInfo] of stockMap) {
+      const wixProduct = wixProductMap.get(sku);
+      if (!wixProduct) continue;
+
+      // Must have inventoryItemId to update inventory
+      if (!wixProduct.inventoryItemId) {
+        logger.warn(CTX, `⚠ SKU ${sku} has no inventoryItemId, skipping`);
+        skipped++;
+        continue;
+      }
+
+      try {
+        // Update inventory using the default variant ID for simple products
+        const defaultVariantId = '00000000-0000-0000-0000-000000000000';
+
+        if (dryRun) {
+          // DRY-RUN: only log what would happen
+          if (stockInfo.effectiveStock === 0) {
+            logger.info(CTX, `${modeLabel} Would block SKU ${sku} (total=${stockInfo.totalStock.toFixed(0)} < ${minThreshold})`);
+            blocked++;
+          } else {
+            logger.info(CTX, `${modeLabel} Would update SKU ${sku} → ${stockInfo.effectiveStock} units`);
+            updated++;
+          }
+        } else {
+          // LIVE: actually update Wix
+          await updateInventoryVariants(wixProduct.inventoryItemId, true, [
+            { variantId: defaultVariantId, quantity: stockInfo.effectiveStock, inStock: stockInfo.effectiveStock > 0 },
+          ]);
+
+          if (stockInfo.effectiveStock === 0) {
+            logger.info(CTX, `⛔ Blocked SKU ${sku} in Wix (total=${stockInfo.totalStock.toFixed(0)} < ${minThreshold})`);
+            blocked++;
+          } else {
+            logger.info(CTX, `✓ Updated SKU ${sku} → ${stockInfo.effectiveStock} units`);
+            updated++;
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(CTX, `✖ Failed to update SKU ${sku}: ${msg}`);
+        errors++;
+      }
+    }
+
+    logger.info(CTX, `${modeLabel} Sync complete: ${updated} updated, ${blocked} blocked (stock<${minThreshold}), ${skipped} skipped, ${errors} errors`);
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // STEP 5: Update watermark to latest processed timestamp
+    // ══════════════════════════════════════════════════════════════════════════
+    // Skip watermark update in test mode so we can re-run with more SKUs
+    if (this.testLimit) {
+      logger.info(CTX, `${modeLabel} Skipping watermark update (test mode)`);
+    } else if (changedRows.length > 0 && (dryRun || (updated + blocked) > 0)) {
+      // PostgreSQL returns timestamp - convert to ISO format for consistent storage
+      const rawTimestamp = changedRows[0].last_updated;
+      const latestTimestamp = new Date(rawTimestamp).toISOString();
+      setSetting(WATERMARK_KEY, latestTimestamp);
+      logger.info(CTX, `Watermark updated to: ${latestTimestamp}`);
+    }
   }
 }

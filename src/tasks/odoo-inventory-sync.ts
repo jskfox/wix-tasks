@@ -37,7 +37,7 @@ interface MssqlArticleRow {
   Unidad_Id: number;
   Unidad_Nombre: string;
   Articulo_Precio1: number;
-  Articulo_Costo_Actual: number;
+  AxS_Costo_Actual: number;
   Articulo_Fec_Actualizacion: string;
   Articulo_Activo: boolean;
 }
@@ -551,6 +551,10 @@ export class OdooInventorySyncTask extends BaseTask {
     // - Use Articulo_Activo_Venta = 1
     // - Exclude names starting with (INS)
     // - Clean name: remove (XXXX) prefix if present (e.g. "(ACME) PRODUCTO")
+    // - Cost: uses AxS_Costo_Actual from Articulo_x_Sucursal (real cost per branch)
+    //   with fallback to Articulo_Costo_Actual when no branch record exists.
+    //   Suc_Id is resolved from SUCURSAL_WIX (Suc_Codigo_Externo) at query time.
+    const SUC_WIX = config.sucursalWix; // e.g. 101
     return mssqlQuery<MssqlArticleRow>(`
       SELECT
         a.Articulo_Id,
@@ -569,19 +573,24 @@ export class OdooInventorySyncTask extends BaseTask {
         a.Unidad_Id,
         ISNULL(u.Unidad_Nombre, 'PIEZA')              AS Unidad_Nombre,
         a.Articulo_Precio1,
-        a.Articulo_Costo_Actual,
+        ISNULL(axs.AxS_Costo_Actual, a.Articulo_Costo_Actual) AS AxS_Costo_Actual,
         a.Articulo_Fec_Actualizacion,
         CAST(a.Articulo_Activo_Venta AS BIT)          AS Articulo_Activo
-      FROM Articulo a
-        LEFT JOIN Departamento d
+      FROM Articulo a WITH (NOLOCK)
+        LEFT JOIN Departamento d WITH (NOLOCK)
           ON d.Emp_Id = a.Emp_Id AND d.Depto_Id = a.Depto_Id
-        LEFT JOIN Categoria_Articulo c
+        LEFT JOIN Categoria_Articulo c WITH (NOLOCK)
           ON c.Emp_Id = a.Emp_Id AND c.Categoria_Id = a.Categoria_Id
-        LEFT JOIN SubCategoria_Articulo sc
+        LEFT JOIN SubCategoria_Articulo sc WITH (NOLOCK)
           ON sc.Emp_Id = a.Emp_Id AND sc.Categoria_Id = a.Categoria_Id
              AND sc.SubCategoria_Id = a.SubCategoria_Id
-        LEFT JOIN Unidad u
+        LEFT JOIN Unidad u WITH (NOLOCK)
           ON u.Emp_Id = a.Emp_Id AND u.Unidad_Id = a.Unidad_Id
+        LEFT JOIN Sucursal suc WITH (NOLOCK)
+          ON suc.Emp_Id = a.Emp_Id AND suc.Suc_Codigo_Externo = '${SUC_WIX}'
+        LEFT JOIN Articulo_x_Sucursal axs WITH (NOLOCK)
+          ON axs.Emp_Id = a.Emp_Id AND axs.Articulo_Id = a.Articulo_Id
+             AND axs.Suc_Id = suc.Suc_Id
       WHERE a.Emp_Id = ${EMP_ID}
         AND a.Articulo_Activo_Venta = 1
         AND a.Articulo_Nombre NOT LIKE '(INS)%'
@@ -591,7 +600,7 @@ export class OdooInventorySyncTask extends BaseTask {
   private async fetchBarcodes(): Promise<MssqlBarcodeRow[]> {
     return mssqlQuery<MssqlBarcodeRow>(`
       SELECT Articulo_Id, Equivalente_Id, Equivalente_Principal
-      FROM Articulo_Equivalente
+      FROM Articulo_Equivalente WITH (NOLOCK)
       WHERE Emp_Id = ${EMP_ID}
     `);
   }
@@ -615,10 +624,10 @@ export class OdooInventorySyncTask extends BaseTask {
         s.Suc_Nombre,
         axb.Articulo_Id,
         SUM(axb.AxB_Existencia) AS total_existencia
-      FROM Articulo_x_Bodega axb
-        INNER JOIN Sucursal s
+      FROM Articulo_x_Bodega axb WITH (NOLOCK)
+        INNER JOIN Sucursal s WITH (NOLOCK)
           ON s.Emp_Id = axb.Emp_Id AND s.Suc_Id = axb.Suc_Id AND s.Suc_Activo = 1
-        INNER JOIN Bodega b
+        INNER JOIN Bodega b WITH (NOLOCK)
           ON b.Emp_Id = axb.Emp_Id AND b.Suc_Id = axb.Suc_Id
              AND b.Bodega_Id = axb.Bodega_Id AND b.Bodega_Existencia_Disponible = 1
       WHERE axb.Emp_Id = ${EMP_ID}
@@ -750,7 +759,7 @@ export class OdooInventorySyncTask extends BaseTask {
 
       const name = (a.Articulo_Nombre || '').trim();
       const listPrice = a.Articulo_Precio1 || 0;
-      const standardPrice = a.Articulo_Costo_Actual || 0;
+      const standardPrice = a.AxS_Costo_Actual || 0;
       const active = !!a.Articulo_Activo;
 
       articleMap.set(sku, {
@@ -1173,8 +1182,18 @@ export class OdooInventorySyncTask extends BaseTask {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // APPLY UPDATES (batch, grouped by identical change‑sets)
+  // APPLY UPDATES — two‑phase strategy:
+  //   Phase A: "categorical" fields (name, categ_id, barcode, active, pos_categ_ids,
+  //            available_in_pos) — these are often shared across products, so we
+  //            group by identical change‑set and batch‑write (many IDs, one write).
+  //   Phase B: "numeric" fields (list_price, standard_price) — unique per product,
+  //            so grouping yields ~1 group per product.  We use concurrent workers
+  //            with retry (same pattern as stock.quant writes) for throughput.
   // ═══════════════════════════════════════════════════════════════════════════
+
+  private static readonly NUMERIC_FIELDS = new Set(['list_price', 'standard_price']);
+  private get WRITE_CONCURRENCY() { return Math.max(1, config.odoo.productWriteConcurrency); }
+  private get WRITE_MAX_RETRIES() { return Math.max(1, config.odoo.productWriteRetries); }
 
   private async applyUpdates(
     toUpdate: { odooId: number; article: NormalizedArticle; changes: Record<string, unknown> }[],
@@ -1188,35 +1207,106 @@ export class OdooInventorySyncTask extends BaseTask {
       return;
     }
 
-    const changeGroups = new Map<string, { ids: number[]; changes: Record<string, unknown> }>();
-    for (const item of toUpdate) {
-      const key = JSON.stringify(item.changes);
-      if (!changeGroups.has(key)) changeGroups.set(key, { ids: [], changes: item.changes });
-      changeGroups.get(key)!.ids.push(item.odooId);
-    }
+    // ── Split changes into categorical (batcheable) and numeric (per‑product) ──
+    const categoricalUpdates: { odooId: number; changes: Record<string, unknown> }[] = [];
+    const numericUpdates: { odooId: number; changes: Record<string, unknown> }[] = [];
 
-    let updated = 0;
-    let groupNum = 0;
-    for (const [, group] of changeGroups) {
-      groupNum++;
-      const batches = chunk(group.ids, 200);
-      for (let bi = 0; bi < batches.length; bi++) {
-        const idBatch = batches[bi];
-        try {
-          await executeKw<boolean>('product.template', 'write', [idBatch, group.changes]);
-          updated += idBatch.length;
-          
-          // Progress logging every 10 batches or 2000 items
-          if (updated % 2000 < 200 || (bi + 1) === batches.length) {
-            logger.info(CTX, `  Update progress: ${updated}/${toUpdate.length} (group ${groupNum}/${changeGroups.size})`);
-          }
-        } catch (err) {
-          logger.error(CTX, `  Failed to update ${idBatch.length} products: ${(err as Error).message}`);
+    for (const item of toUpdate) {
+      const catChanges: Record<string, unknown> = {};
+      const numChanges: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(item.changes)) {
+        if (OdooInventorySyncTask.NUMERIC_FIELDS.has(k)) {
+          numChanges[k] = v;
+        } else {
+          catChanges[k] = v;
         }
+      }
+      if (Object.keys(catChanges).length > 0) {
+        categoricalUpdates.push({ odooId: item.odooId, changes: catChanges });
+      }
+      if (Object.keys(numChanges).length > 0) {
+        numericUpdates.push({ odooId: item.odooId, changes: numChanges });
       }
     }
 
-    logger.info(CTX, `  Total updated: ${updated} (in ${changeGroups.size} change groups)`);
+    let totalUpdated = 0;
+
+    // ── Phase A: Categorical — group by identical change‑set, batch write ──
+    if (categoricalUpdates.length > 0) {
+      const groups = new Map<string, { ids: number[]; changes: Record<string, unknown> }>();
+      for (const item of categoricalUpdates) {
+        const key = JSON.stringify(item.changes);
+        if (!groups.has(key)) groups.set(key, { ids: [], changes: item.changes });
+        groups.get(key)!.ids.push(item.odooId);
+      }
+
+      logger.info(CTX, `  Phase A: ${categoricalUpdates.length} categorical updates in ${groups.size} groups`);
+      let catUpdated = 0;
+      for (const [, group] of groups) {
+        for (const idBatch of chunk(group.ids, 200)) {
+          try {
+            await executeKw<boolean>('product.template', 'write', [idBatch, group.changes]);
+            catUpdated += idBatch.length;
+          } catch (err) {
+            logger.error(CTX, `  Categorical batch failed (${idBatch.length} products): ${(err as Error).message}`);
+          }
+        }
+      }
+      logger.info(CTX, `  Phase A done: ${catUpdated} products updated`);
+      totalUpdated += catUpdated;
+    }
+
+    // ── Phase B: Numeric (price/cost) — concurrent workers with retry ──────
+    if (numericUpdates.length > 0) {
+      logger.info(CTX, `  Phase B: ${numericUpdates.length} price/cost updates (concurrency=${this.WRITE_CONCURRENCY})`);
+      let numUpdated = 0;
+      let numErrors = 0;
+
+      const queue = [...numericUpdates];
+      const concurrency = this.WRITE_CONCURRENCY;
+      const maxRetries = this.WRITE_MAX_RETRIES;
+
+      const workers = Array.from({ length: concurrency }, () => (async () => {
+        while (queue.length > 0) {
+          const item = queue.shift();
+          if (!item) break;
+
+          let ok = false;
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+              await executeKw<boolean>('product.template', 'write', [[item.odooId], item.changes]);
+              numUpdated++;
+              ok = true;
+              break;
+            } catch (err) {
+              if (attempt < maxRetries && isTransientXmlRpcError(err)) {
+                await sleep(250 * attempt);
+                continue;
+              }
+              logger.error(CTX, `  Price update failed id=${item.odooId}: ${(err as Error).message}`);
+              numErrors++;
+              break;
+            }
+          }
+        }
+      })());
+
+      // Progress reporter (runs alongside workers)
+      const progressInterval = setInterval(() => {
+        const done = numUpdated + numErrors;
+        if (done > 0) {
+          logger.info(CTX, `  Phase B progress: ${done}/${numericUpdates.length} (${numErrors} errors)`);
+        }
+      }, 5000);
+
+      await Promise.all(workers);
+      clearInterval(progressInterval);
+
+      logger.info(CTX, `  Phase B done: ${numUpdated} updated, ${numErrors} errors`);
+      totalUpdated += numUpdated;
+    }
+
+    logger.info(CTX, `  Total updated: ${totalUpdated}/${toUpdate.length}`);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1419,8 +1509,8 @@ export class OdooInventorySyncTask extends BaseTask {
     // But we CAN batch the action_apply_inventory call after individual writes.
     // Strategy: write in parallel batches, then apply inventory in batch.
     const UPDATE_BATCH = 100;
-    const WRITE_CONCURRENCY = Math.max(1, parseInt(process.env.ODOO_STOCK_WRITE_CONCURRENCY || '12', 10));
-    const WRITE_MAX_RETRIES = Math.max(1, parseInt(process.env.ODOO_STOCK_WRITE_RETRIES || '3', 10));
+    const WRITE_CONCURRENCY = Math.max(1, config.odoo.stockWriteConcurrency);
+    const WRITE_MAX_RETRIES = Math.max(1, config.odoo.stockWriteRetries);
     const updateBatches = chunk(toUpdate, UPDATE_BATCH);
     logger.info(CTX, `  Updating ${toUpdate.length} quants in ${updateBatches.length} batches...`);
 
@@ -1550,7 +1640,7 @@ export class OdooInventorySyncTask extends BaseTask {
           DATALENGTH(i.Imagen) AS img_size,
           i.Fecha,
           ROW_NUMBER() OVER (PARTITION BY i.Articulo_Id ORDER BY i.Fecha DESC) AS rn
-        FROM Articulo_Imagen_FS i
+        FROM Articulo_Imagen_FS i WITH (NOLOCK)
         WHERE i.Emp_Id = ${EMP_ID}
           AND i.Tipo_Imagen = 'GRA'
           AND i.Imagen_Principal = 1
@@ -1568,7 +1658,7 @@ export class OdooInventorySyncTask extends BaseTask {
         SELECT
           Articulo_Id, Imagen,
           ROW_NUMBER() OVER (PARTITION BY Articulo_Id ORDER BY Fecha DESC) AS rn
-        FROM Articulo_Imagen_FS
+        FROM Articulo_Imagen_FS WITH (NOLOCK)
         WHERE Emp_Id = ${EMP_ID}
           AND Tipo_Imagen = 'GRA'
           AND Imagen_Principal = 1

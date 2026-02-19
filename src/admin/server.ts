@@ -9,6 +9,14 @@ import {
   updateCron,
   setTaskEnabled,
 } from '../scheduler';
+import {
+  getAllSettings,
+  getCategories,
+  getSetting,
+  setSetting,
+  deleteSetting,
+  Setting,
+} from '../services/settings-db';
 
 const CTX = 'AdminServer';
 const ADMIN_PORT = parseInt(process.env.ADMIN_PORT || '3800', 10);
@@ -195,28 +203,85 @@ export function startAdminServer(): void {
     res.json(getLogBuffer({ level: level as any, context, limit }));
   });
 
-  // ── API: Config (with editable flags) ──────────────────────────────────
-  app.get('/api/config', (_req, res) => {
-    res.json(flattenConfig(config as unknown as Record<string, unknown>));
+  // ── API: Settings (SQLite-backed) ──────────────────────────────────────
+  app.get('/api/settings', (req, res) => {
+    const category = req.query.category as string | undefined;
+    res.json(getAllSettings(category || undefined));
   });
 
-  // ── API: Update config value ───────────────────────────────────────────
-  app.put('/api/config', (req, res) => {
+  app.get('/api/settings/categories', (_req, res) => {
+    res.json(getCategories());
+  });
+
+  app.put('/api/settings', (req, res) => {
     const { key, value } = req.body;
     if (!key || value === undefined) {
       return res.status(400).json({ error: 'Missing "key" and "value"' });
     }
-    if (!EDITABLE_KEYS.has(key)) {
-      return res.status(403).json({ error: `Key "${key}" is not editable` });
-    }
     try {
-      setNestedValue(config as unknown as Record<string, any>, key, value);
-      logger.info(CTX, `Config updated: ${key} = ${value}`);
-      res.json({ message: `Config "${key}" updated`, key, value: String(value) });
+      setSetting(key, String(value));
+      logger.info(CTX, `Setting updated: ${key} = ${value}`);
+      res.json({ message: `Setting "${key}" updated`, key, value: String(value) });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       res.status(400).json({ error: msg });
     }
+  });
+
+  app.delete('/api/settings', (req, res) => {
+    const key = req.query.key as string;
+    if (!key) {
+      return res.status(400).json({ error: 'Missing "key" query param' });
+    }
+    const deleted = deleteSetting(key);
+    if (deleted) {
+      logger.info(CTX, `Setting deleted: ${key}`);
+      res.json({ message: `Setting "${key}" deleted` });
+    } else {
+      res.status(404).json({ error: `Setting "${key}" not found` });
+    }
+  });
+
+  // ── API: Config (legacy — read-only view of merged config) ────────────
+  app.get('/api/config', (_req, res) => {
+    res.json(flattenConfig(config as unknown as Record<string, unknown>));
+  });
+
+  // ── API: Required env vars (informational — no values exposed) ────────
+  app.get('/api/env-vars', (_req, res) => {
+    const REQUIRED_ENV_VARS = [
+      // PostgreSQL
+      { name: 'PG_HOST',     example: '192.168.1.10',      description: 'Host del servidor PostgreSQL',          group: 'PostgreSQL' },
+      { name: 'PG_USER',     example: 'postgres',           description: 'Usuario de PostgreSQL',                 group: 'PostgreSQL' },
+      { name: 'PG_PASSWORD', example: '••••••••',           description: 'Contraseña de PostgreSQL',              group: 'PostgreSQL' },
+      // MSSQL
+      { name: 'MSSQL_SERVER', example: '192.168.1.20',     description: 'Host del servidor MSSQL (SQL Server)',   group: 'MSSQL' },
+      { name: 'MSSQL_USER',   example: 'sa',               description: 'Usuario de MSSQL',                      group: 'MSSQL' },
+      { name: 'MSSQL_PASSWORD', example: '••••••••',       description: 'Contraseña de MSSQL',                   group: 'MSSQL' },
+      // Wix
+      { name: 'WIX_SITE_ID', example: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', description: 'ID del sitio Wix (Settings → Advanced)', group: 'Wix' },
+      { name: 'WIX_API_KEY', example: 'IST.eyJ...',        description: 'API Key de Wix (Headless Settings)',     group: 'Wix' },
+      // SMTP
+      { name: 'SMTP_HOST',   example: 'smtp.gmail.com',    description: 'Host del servidor SMTP',                group: 'SMTP' },
+      { name: 'SMTP_USER',   example: 'user@dominio.com',  description: 'Usuario/email de autenticación SMTP',   group: 'SMTP' },
+      { name: 'SMTP_PASS',   example: '••••••••',          description: 'Contraseña de autenticación SMTP',      group: 'SMTP' },
+      // Odoo
+      { name: 'ODOO_URL',      example: 'https://odoo.empresa.com', description: 'URL base de la instancia Odoo', group: 'Odoo' },
+      { name: 'ODOO_DB',       example: 'proconsa',               description: 'Nombre de la base de datos Odoo', group: 'Odoo' },
+      { name: 'ODOO_USERNAME', example: 'admin',                  description: 'Usuario de Odoo (login)',         group: 'Odoo' },
+      { name: 'ODOO_PASSWORD', example: '••••••••',               description: 'Contraseña del usuario Odoo',    group: 'Odoo' },
+      // Admin
+      { name: 'ADMIN_PORT',     example: '3800',     description: 'Puerto del dashboard de administración (no es credencial, pero se lee antes de que SQLite esté disponible)', group: 'Admin' },
+      { name: 'ADMIN_USER',     example: 'admin',    description: 'Usuario del dashboard',                                          group: 'Admin' },
+      { name: 'ADMIN_PASSWORD', example: '••••••••', description: 'Contraseña del dashboard (requerida para activarlo)',             group: 'Admin' },
+      // Sistema
+      { name: 'STATE_DIR', example: './state', description: 'Ruta donde se almacena settings.db. Debe configurarse en .env porque se lee ANTES de que la base de datos esté disponible', group: 'Sistema' },
+    ];
+
+    res.json(REQUIRED_ENV_VARS.map(v => ({
+      ...v,
+      present: !!process.env[v.name],
+    })));
   });
 
   // ── API: System info ─────────────────────────────────────────────────────
@@ -229,6 +294,7 @@ export function startAdminServer(): void {
       memoryUsage: process.memoryUsage(),
       pid: process.pid,
       cwd: process.cwd(),
+      timezone: config.timezone,
     });
   });
 
@@ -271,8 +337,10 @@ body{font-family:var(--font-sans);background:var(--surface-base);color:var(--ink
 .page-header h2{font-size:20px;font-weight:700;letter-spacing:-0.4px}
 .card{background:var(--surface-1);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:var(--space-lg);margin-bottom:var(--space-md)}
 .task-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:var(--space-md)}
-.task-card{background:var(--surface-1);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:var(--space-lg);transition:border-color .15s}
+.task-card{background:var(--surface-1);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:var(--space-lg);transition:all .15s}
 .task-card:hover{border-color:var(--border-emphasis)}
+.task-card.disabled{opacity:0.6;background:var(--surface-2);border-color:var(--border-soft)}
+.task-card.disabled:hover{border-color:var(--border-std)}
 .task-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:var(--space-sm)}
 .task-name{font-size:14px;font-weight:600;font-family:var(--font-mono);letter-spacing:-0.3px}
 .task-desc{font-size:12px;color:var(--ink-tertiary);margin-bottom:var(--space-md);line-height:1.4}
@@ -297,6 +365,7 @@ body{font-family:var(--font-sans);background:var(--surface-base);color:var(--ink
 .btn-primary:hover{background:#5a7aee}
 .btn-danger{color:var(--error);border-color:rgba(255,0,102,0.3)}
 .btn-danger:hover{background:var(--error-dim)}
+.btn-accent{background:var(--accent-dim);color:var(--accent);border-color:var(--accent)}
 .btn-sm{padding:4px 10px;font-size:11px}
 .log-controls{display:flex;gap:var(--space-sm);margin-bottom:var(--space-md);flex-wrap:wrap;align-items:center}
 .log-controls select,.log-controls input{background:var(--surface-2);border:1px solid var(--border-std);border-radius:var(--radius-sm);color:var(--ink-primary);padding:6px 10px;font-size:12px;font-family:var(--font-sans)}
@@ -316,10 +385,11 @@ body{font-family:var(--font-sans);background:var(--surface-base);color:var(--ink
 .redacted{color:var(--ink-muted);font-style:italic}
 .config-edit-input{background:var(--surface-2);border:1px solid var(--border-std);border-radius:var(--radius-sm);color:var(--ink-primary);padding:4px 8px;font-size:12px;font-family:var(--font-mono);width:200px}
 .config-edit-input:focus{outline:none;border-color:var(--accent)}
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--space-md)}
-.stat-card{background:var(--surface-2);border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:var(--space-md)}
-.stat-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--ink-tertiary);margin-bottom:var(--space-xs)}
-.stat-value{font-size:20px;font-weight:700;font-family:var(--font-mono);letter-spacing:-0.5px;font-variant-numeric:tabular-nums}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--space-md)}
+.stat-card{background:var(--surface-1);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:var(--space-lg);transition:border-color .15s}
+.stat-card:hover{border-color:var(--border-emphasis)}
+.stat-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--ink-muted);margin-bottom:var(--space-sm)}
+.stat-value{font-size:16px;font-weight:600;font-family:var(--font-mono);letter-spacing:-0.3px;font-variant-numeric:tabular-nums;color:var(--ink-primary);line-height:1.4}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(4px)}
 .modal-overlay.hidden{display:none}
 .modal{background:var(--surface-1);border:1px solid var(--border-std);border-radius:var(--radius-lg);padding:var(--space-xl);min-width:380px;max-width:560px}
@@ -421,11 +491,28 @@ body{font-family:var(--font-sans);background:var(--surface-base);color:var(--ink
       </div>
     </div>
     <div id="page-config" class="page" style="display:none">
-      <div class="page-header"><h2>Configuraci&oacute;n</h2></div>
-      <p style="font-size:12px;color:var(--ink-tertiary);margin-bottom:var(--space-md)">Las variables editables se pueden modificar en tiempo real. Los cambios aplican inmediatamente pero no persisten al reiniciar.</p>
-      <div class="card" style="padding:0;overflow:auto">
-        <table class="config-table"><thead><tr><th>Variable</th><th>Valor</th><th></th></tr></thead><tbody id="config-body"></tbody></table>
+      <div class="page-header"><h2>Configuraci&oacute;n</h2><button class="btn btn-sm" onclick="loadConfig()">Actualizar</button></div>
+      <p style="font-size:12px;color:var(--ink-tertiary);margin-bottom:var(--space-md)">Configuraci&oacute;n almacenada en SQLite. Los cambios aplican inmediatamente y persisten entre reinicios. Las credenciales sensibles se mantienen en variables de entorno (.env).</p>
+
+      <!-- ENV VARS INFO SECTION -->
+      <div class="card" style="margin-bottom:var(--space-md);border-left:3px solid var(--warn)">
+        <div style="display:flex;align-items:center;gap:var(--space-sm);margin-bottom:var(--space-md);cursor:pointer" onclick="toggleEnvVars()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;color:var(--warn);flex-shrink:0"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--warn);background:rgba(234,179,8,0.1);padding:2px 8px;border-radius:4px">Variables de Entorno (.env)</span>
+          <span style="font-size:11px;color:var(--ink-tertiary)">Credenciales sensibles &mdash; no se almacenan en base de datos</span>
+          <svg id="env-vars-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--ink-tertiary);margin-left:auto;transition:transform 0.2s"><polyline points="6,9 12,15 18,9"/></svg>
+        </div>
+        <div id="env-vars-body" style="display:none">
+          <p style="font-size:11px;color:var(--ink-tertiary);margin-bottom:var(--space-md)">Estas variables deben configurarse en el archivo <code style="background:var(--surface-2);padding:1px 5px;border-radius:3px">.env</code> del servidor. No son editables desde el dashboard.</p>
+          <table class="config-table" style="width:100%">
+            <thead><tr><th style="width:28%">Variable</th><th style="width:20%">Ejemplo / Formato</th><th>Descripci&oacute;n</th><th style="width:12%">Estado</th></tr></thead>
+            <tbody id="env-vars-table"></tbody>
+          </table>
+        </div>
       </div>
+
+      <div style="display:flex;gap:var(--space-sm);margin-bottom:var(--space-md);flex-wrap:wrap" id="settings-category-tabs"></div>
+      <div id="settings-container"></div>
     </div>
     <div id="page-system" class="page" style="display:none">
       <div class="page-header"><h2>Sistema</h2><div class="refresh-indicator"><div class="refresh-dot"></div> Auto-refresh 5s</div></div>
@@ -586,42 +673,8 @@ function showPage(page) {
   if (page === 'system') loadSystem();
 }
 
-// ── Next run calculator (client-side cron parser) ───────────────────────────
-function getNextRun(cronExpr, tz) {
-  try {
-    const parts = cronExpr.split(/\\s+/);
-    if (parts.length !== 5) return null;
-    const now = new Date();
-    // Simple brute-force: check each minute for the next 48 hours
-    for (let i = 1; i <= 2880; i++) {
-      const candidate = new Date(now.getTime() + i * 60000);
-      const cStr = candidate.toLocaleString('en-US', { timeZone: tz, hour12: false });
-      const d = new Date(cStr);
-      const min = d.getMinutes(), hr = d.getHours(), dom = d.getDate(), mon = d.getMonth() + 1, dow = d.getDay();
-      if (matchField(parts[0], min, 0, 59) && matchField(parts[1], hr, 0, 23) && matchField(parts[2], dom, 1, 31) && matchField(parts[3], mon, 1, 12) && matchField(parts[4], dow, 0, 7)) {
-        return candidate.toISOString();
-      }
-    }
-  } catch(e) {}
-  return null;
-}
-function matchField(field, value, min, max) {
-  if (field === '*') return true;
-  return field.split(',').some(part => {
-    const [rangeStep, step] = part.split('/');
-    if (step) {
-      const s = parseInt(step);
-      if (rangeStep === '*') return value % s === 0;
-      const [a] = rangeStep.split('-').map(Number);
-      return value >= a && (value - a) % s === 0;
-    }
-    if (part.includes('-')) {
-      const [a, b] = part.split('-').map(Number);
-      return value >= a && value <= b;
-    }
-    return parseInt(part) === value || (field === '7' && value === 0);
-  });
-}
+// ── Server timezone is injected via API ─────────────────────────────────────
+let serverTimezone = 'America/Los_Angeles'; // default, will be updated from /api/system
 
 // ── Tasks ───────────────────────────────────────────────────────────────────
 async function loadTasks() {
@@ -640,11 +693,10 @@ function renderTaskCard(t) {
   const lastInfo = t.lastRun
     ? '<div class="task-meta-row"><span class="last-run-' + (t.lastRun.status === 'success' ? 'ok' : 'err') + '">&#x25CF;</span> &Uacute;ltima: ' + formatTime(t.lastRun.startedAt) + ' (' + formatDuration(t.lastRun.durationMs) + ')</div>'
     : '<div class="task-meta-row" style="color:var(--ink-muted)">Sin ejecuciones a&uacute;n</div>';
-  const nextIso = t.enabled ? getNextRun(t.cronExpression, t.timezone) : null;
-  const nextInfo = nextIso
-    ? '<div class="task-meta-row"><span class="next-run">&#x25B6;</span> Pr&oacute;xima: <span class="next-run">' + formatTime(nextIso) + '</span></div>'
+  const nextInfo = t.nextRun
+    ? '<div class="task-meta-row"><span class="next-run">&#x25B6;</span> Pr&oacute;xima: <span class="next-run">' + formatTime(t.nextRun) + '</span></div>'
     : t.enabled ? '' : '<div class="task-meta-row" style="color:var(--ink-muted)">Deshabilitada</div>';
-  return '<div class="task-card">'
+  return '<div class="task-card' + (!t.enabled ? ' disabled' : '') + '">'
     + '<div class="task-header"><span class="task-name">' + esc(t.name) + '</span>' + statusBadge + '</div>'
     + '<div class="task-desc">' + esc(t.description) + '</div>'
     + '<div class="task-meta">'
@@ -843,26 +895,102 @@ function stopLogsLive() {
   }
 }
 
-// ── Config (editable) ───────────────────────────────────────────────────────
+// ── Env Vars (informational) ──────────────────────────────────────────────────
+let envVarsLoaded = false;
+function toggleEnvVars() {
+  const body = document.getElementById('env-vars-body');
+  const chevron = document.getElementById('env-vars-chevron');
+  const isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? 'block' : 'none';
+  chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
+  if (isHidden && !envVarsLoaded) loadEnvVars();
+}
+async function loadEnvVars() {
+  try {
+    const vars = await api('/env-vars');
+    envVarsLoaded = true;
+    const groups = {};
+    vars.forEach(v => { if (!groups[v.group]) groups[v.group] = []; groups[v.group].push(v); });
+    let html = '';
+    for (const [group, items] of Object.entries(groups)) {
+      html += '<tr><td colspan="4" style="padding:8px 4px 2px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--ink-tertiary);border-bottom:1px solid var(--border)">' + esc(group) + '</td></tr>';
+      for (const v of items) {
+        const badge = v.present
+          ? '<span style="font-size:10px;padding:2px 7px;border-radius:3px;background:rgba(34,197,94,0.15);color:#22c55e;font-weight:600">&#10003; Configurada</span>'
+          : '<span style="font-size:10px;padding:2px 7px;border-radius:3px;background:rgba(239,68,68,0.15);color:#ef4444;font-weight:600">&#10007; Falta</span>';
+        html += '<tr>'
+          + '<td style="font-family:var(--font-mono);font-size:12px;color:var(--accent);padding-left:12px">' + esc(v.name) + '</td>'
+          + '<td style="font-family:var(--font-mono);font-size:11px;color:var(--ink-tertiary)">' + esc(v.example) + '</td>'
+          + '<td style="font-size:11px;color:var(--ink-secondary)">' + esc(v.description) + '</td>'
+          + '<td style="text-align:center">' + badge + '</td>'
+          + '</tr>';
+      }
+    }
+    document.getElementById('env-vars-table').innerHTML = html;
+  } catch (e) { console.error(e); }
+}
+
+// ── Settings (SQLite-backed) ─────────────────────────────────────────────────
+// Keys that are informational only — managed externally, not editable from the UI
+const READONLY_KEYS = new Set([
+  'state_dir',  // Controlled by STATE_DIR env var, not SQLite
+  'wix.price_inventory_sync.last_processed_timestamp',  // Watermark managed by task
+]);
+
+let settingsCategory = '';
 async function loadConfig() {
   try {
-    const entries = await api('/config');
-    document.getElementById('config-body').innerHTML = entries.map(e => {
-      const valCell = e.sensitive
-        ? '<td class="redacted">' + e.value + '</td><td></td>'
-        : e.editable
-          ? '<td><input class="config-edit-input" data-key="' + e.key + '" value="' + esc(e.value) + '" onkeydown="if(event.key===\\'Enter\\')saveConfig(this)"></td><td><button class="btn btn-sm" onclick="saveConfig(this.parentElement.previousElementSibling.querySelector(\\'input\\'))">Guardar</button></td>'
-          : '<td>' + esc(e.value) + '</td><td></td>';
-      return '<tr><td>' + esc(e.key) + '</td>' + valCell + '</tr>';
-    }).join('');
+    const cats = await api('/settings/categories');
+    const tabsEl = document.getElementById('settings-category-tabs');
+    tabsEl.innerHTML = '<button class="btn btn-sm' + (!settingsCategory ? ' btn-accent' : '') + '" onclick="settingsCategory=\\'\\';loadConfig()">Todas</button>'
+      + cats.map(c => '<button class="btn btn-sm' + (settingsCategory === c ? ' btn-accent' : '') + '" onclick="settingsCategory=\\'' + c + '\\';loadConfig()">' + esc(c) + '</button>').join('');
+
+    const url = settingsCategory ? '/settings?category=' + settingsCategory : '/settings';
+    const settings = await api(url);
+
+    // Group by category
+    const groups = {};
+    settings.forEach(s => { if (!groups[s.category]) groups[s.category] = []; groups[s.category].push(s); });
+
+    let html = '';
+    for (const [cat, items] of Object.entries(groups)) {
+      html += '<div class="card" style="margin-bottom:var(--space-md)">'
+        + '<div style="display:flex;align-items:center;gap:var(--space-sm);margin-bottom:var(--space-md)">'
+        + '<span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);background:var(--accent-dim);padding:2px 8px;border-radius:4px">' + esc(cat) + '</span>'
+        + '<span style="font-size:11px;color:var(--ink-tertiary)">' + items.length + ' setting(s)</span>'
+        + '</div>'
+        + '<table class="config-table" style="width:100%"><thead><tr><th style="width:30%">Clave</th><th style="width:45%">Valor</th><th style="width:15%">Descripci&oacute;n</th><th style="width:10%"></th></tr></thead><tbody>';
+      for (const s of items) {
+        const readonly = READONLY_KEYS.has(s.key);
+        if (readonly) {
+          html += '<tr style="opacity:0.7">'
+            + '<td style="font-family:var(--font-mono);font-size:12px;color:var(--accent)">' + esc(s.key) + '</td>'
+            + '<td style="font-family:var(--font-mono);font-size:12px;color:var(--ink-secondary);padding:6px 8px">' + esc(s.value) + '</td>'
+            + '<td style="font-size:11px;color:var(--ink-tertiary)">' + esc(s.description || '') + '</td>'
+            + '<td style="text-align:center"><span style="font-size:10px;padding:2px 7px;border-radius:3px;background:var(--surface-2);color:var(--ink-tertiary)">solo lectura</span></td>'
+            + '</tr>';
+        } else {
+          html += '<tr>'
+            + '<td style="font-family:var(--font-mono);font-size:12px;color:var(--accent)">' + esc(s.key) + '</td>'
+            + '<td><input class="config-edit-input" data-key="' + esc(s.key) + '" value="' + esc(s.value) + '" onkeydown="if(event.key===\\'Enter\\')saveSetting(this)" style="width:100%"></td>'
+            + '<td style="font-size:11px;color:var(--ink-tertiary)">' + esc(s.description || '') + '</td>'
+            + '<td><button class="btn btn-sm" onclick="saveSetting(this.closest(\\'tr\\').querySelector(\\'input\\'))">Guardar</button></td>'
+            + '</tr>';
+        }
+      }
+      html += '</tbody></table></div>';
+    }
+    document.getElementById('settings-container').innerHTML = html;
   } catch (e) { if (e.message !== 'Session expired') console.error(e); }
 }
-async function saveConfig(input) {
+async function saveSetting(input) {
   const key = input.dataset.key;
   const value = input.value;
   try {
-    await api('/config', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key,value}) });
-    toast('Config "' + key + '" actualizada');
+    await api('/settings', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({key,value}) });
+    toast('Setting "' + key + '" guardada');
+    input.style.borderColor = 'var(--success)';
+    setTimeout(() => { input.style.borderColor = ''; }, 1500);
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -870,11 +998,24 @@ async function saveConfig(input) {
 async function loadSystem() {
   try {
     const s = await api('/system');
+    // Update global timezone from server
+    if (s.timezone) serverTimezone = s.timezone;
+    const serverTime = new Date().toLocaleString('es-MX', { 
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false, timeZone: serverTimezone 
+    });
     document.getElementById('system-stats').innerHTML =
-      stat('Node.js', s.nodeVersion) + stat('Plataforma', s.platform+'/'+s.arch)
-      + stat('Uptime', formatDuration(s.uptime*1000)) + stat('PID', s.pid)
-      + stat('Heap Usado', formatBytes(s.memoryUsage.heapUsed)) + stat('Heap Total', formatBytes(s.memoryUsage.heapTotal))
-      + stat('RSS', formatBytes(s.memoryUsage.rss)) + stat('Directorio', '<span style="font-size:11px;word-break:break-all">'+s.cwd+'</span>');
+      stat('HORA DEL SERVIDOR', serverTime)
+      + stat('ZONA HORARIA', serverTimezone)
+      + stat('NODE.JS', s.nodeVersion)
+      + stat('PLATAFORMA', s.platform+'/'+s.arch)
+      + stat('UPTIME', formatDuration(s.uptime*1000))
+      + stat('PID', s.pid)
+      + stat('HEAP USADO', formatBytes(s.memoryUsage.heapUsed))
+      + stat('HEAP TOTAL', formatBytes(s.memoryUsage.heapTotal))
+      + stat('RSS', formatBytes(s.memoryUsage.rss))
+      + stat('DIRECTORIO', '<span style="font-size:11px;word-break:break-all">'+s.cwd+'</span>');
   } catch (e) { if (e.message !== 'Session expired') console.error(e); }
 }
 function stat(label, value) { return '<div class="stat-card"><div class="stat-label">'+label+'</div><div class="stat-value">'+value+'</div></div>'; }
@@ -882,7 +1023,7 @@ function stat(label, value) { return '<div class="stat-card"><div class="stat-la
 // ── Formatters ──────────────────────────────────────────────────────────────
 function formatTime(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('es-MX', { hour12: false, timeZone: 'America/Tijuana' });
+  return new Date(iso).toLocaleString('es-MX', { hour12: false, timeZone: serverTimezone });
 }
 function formatDuration(ms) {
   if (ms < 1000) return Math.round(ms) + 'ms';

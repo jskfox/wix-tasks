@@ -1,4 +1,93 @@
 session_id,date,operator,active,num_messages,visitor_messages,intents,products,emails
+1688,2026-02-17 01:59:06,Mary Mejora,true,9,Solo estoy viendo | Quiero ayuda/consejo para mi obra,"solo_viendo, busca_producto, contratista",ninguno,
+1687,2026-02-17 01:58:44,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1686,2026-02-17 00:30:52,Mary Mejora,true,5,Solo estoy viendo,solo_viendo,ninguno,
+1685,2026-02-16 23:15:54,Mary Mejora,true,9,"Necesito una cotización de mayoreo | 15 toneladas de varilla de 1/2 y 15 toneladas de vatilla 3/8. Pediria eso cada 15 dias, con destino en ciudad de mexico | juanjosefm2000@gmail.com","cotizacion_mayoreo, busca_producto",Varilla/Acero,juanjosefm2000@gmail.com
+1684,2026-02-16 21:11:18,Mary Mejora,true,6,Me interesan los talleres gratuitos,talleres_clinicas,ninguno,
+1683,2026-02-16 20:36:54,Mary Mejora,false,4,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1682,2026-02-16 20:36:22,Mary Mejora,false,6,Solo estoy viendo,solo_viendo,ninguno,
+1681,2026-02-16 19:17:13,Mary Mejora,false,12,Tengo problemas con el sitio | tony.martinez.laguna.62@gmail.com | tony.martinez.laguna.62@gmail.com,problema_sitio,ninguno,"tony.martinez.laguna.62@gmail.com, tony.martinez.laguna.62@gmail.com"
+1680,2026-02-16 18:44:06,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1679,2026-02-16 17:47:39,Mary Mejora,false,9,Necesito una cotización de mayoreo | 15 bultos de cemento gris | ventura.tabasco.93@hotmail.com,"cotizacion_mayoreo, busca_producto",Cemento/Concreto,ventura.tabasco.93@hotmail.com
+1678,2026-02-16 17:38:55,Mary Mejora,true,4,Necesito una cotización de mayoreo,"cotizacion_mayoreo, busca_producto",ninguno,
+1677,2026-02-16 16:19:06,Mary Mejora,false,9,Necesito una cotización de mayoreo | Necesito un millar de block | Beltran83bai@gmail.com,"cotizacion_mayoreo, busca_producto",Cemento/Concreto,beltran83bai@gmail.com
+1676,2026-02-16 07:12:48,Mary Mejora,false,11,"Necesito una cotización de mayoreo | Loseta | juareznancy1207@gmail.com | Calificación: 
+Ol","cotizacion_mayoreo, busca_producto",Pisos/Loseta,juareznancy1207@gmail.com
+1675,2026-02-16 01:09:01,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1674,2026-02-16 01:03:42,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1673,2026-02-15 22:56:47,Mary Mejora,false,5,Solo estoy viendo,solo_viendo,ninguno,
+1672,2026-02-15 22:45:33,Mary Mejora,true,4,Necesito una cotización de mayoreo,"cotizacion_mayoreo, busca_producto",ninguno,
+1671,2026-02-15 22:45:33,Mary Mejora,true,2,,sin_clasificar,ninguno,
+1670,2026-02-15 21:37:33,Mary Mejora,false,5,Solo estoy viendo,solo_viendo,ninguno,
+1669,2026-02-15 19:03:47,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1668,2026-02-15 05:31:20,Mary Mejora,true,3,Quiero facturar,"busca_producto, factura",ninguno,
+1667,2026-02-15 03:04:47,Mary Mejora,true,5,Solo estoy viendo,solo_viendo,ninguno,
+1666,2026-02-15 00:03:40,Mary Mejora,true,9,Necesito una cotización de mayoreo | Precio de material para una barda | Josmosqueda03@gmail.com,"cotizacion_mayoreo, busca_producto, precio",ninguno,josmosqueda03@gmail.com
+1665,2026-02-14 20:19:57,Mary Mejora,true,20,Me interesan los talleres gratuitos | Tal vez para otro taller | Tiene mangeras | ignaciodejesuscervantesvalenci@gmail.com | Tengo problemas con el sitio,"talleres_clinicas, problema_sitio",ninguno,ignaciodejesuscervantesvalenci@gmail.com
+1664,2026-02-14 19:02:07,Mary Mejora,true,5,Solo estoy viendo,solo_viendo,ninguno,
+1663,2026-02-14 18:59:08,Mary Mejora,true,8,Necesito una cotización de mayoreo | Una bomba periférica de 1/1 hp marca Truper o pretul | Es de 1/2 hp disculpa,"cotizacion_mayoreo, busca_producto",ninguno,
+1662,2026-02-14 17:07:02,Mary Mejora,true,9,Necesito una cotización de mayoreo | CANAL 3 5/8 CALIBRE 25 | RVERGARA@METROMAT.COM.MX,"cotizacion_mayoreo, busca_producto",ninguno,rvergara@metromat.com.mx
+1661,2026-02-13 22:04:40,Mary Mejora,true,9,Necesito una cotización de mayoreo | 6 sacos de cemento | Jonimendoza1992@gmail.com,"cotizacion_mayoreo, busca_producto",Cemento/Concreto,jonimendoza1992@gmail.com
+1660,2026-02-13 21:13:37,Mary Mejora,false,5,Solo estoy viendo,solo_viendo,ninguno,
+1659,2026-02-13 21:12:58,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1658,2026-02-13 21:00:11,Mary Mejora,true,8,Tengo problemas con el sitio | Busco base de fierro para empotrar el lavadero,"problema_sitio, busca_producto",ninguno,
+1657,2026-02-13 20:34:38,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1656,2026-02-13 19:21:40,Mary Mejora,false,4,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1655,2026-02-13 18:59:50,Mary Mejora,true,9,Necesito una cotización de mayoreo | Que precio tiene el alambre de pollo | Belena373@yahoo.com,"cotizacion_mayoreo, busca_producto, precio",Varilla/Acero,belena373@yahoo.com
+1654,2026-02-13 17:43:20,Mary Mejora,true,9,Necesito una cotización de mayoreo | busco clavos para madera de de 2 1/2 | anasofiabc2003@gmail.com,"cotizacion_mayoreo, busca_producto","Varilla/Acero, Madera",anasofiabc2003@gmail.com
+1653,2026-02-13 13:48:35,Mary Mejora,true,5,Solo estoy viendo,solo_viendo,ninguno,
+1652,2026-02-13 08:45:27,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1651,2026-02-13 04:29:57,Mary Mejora,true,5,Solo estoy viendo,solo_viendo,ninguno,
+1650,2026-02-13 00:45:35,Mary Mejora,true,9,"Necesito una cotización de mayoreo | Hola, buen día.Me interesa cotizar una malla ciclónica con las siguientes características:Calibre del alambre: 12.5Abertura del hexágono: 69 mm aproximadamenteAltura de la malla: 2 metrosCantidad total: alrededor de 1.8 km (1800 metros lineales)Postes tubulares: colocación cada 3 metros de distanciaAltura del poste: 2.6 metrosRecubrimiento: requiero protección para intemperie, ya que la instalación estará a la intemperie en Sonora (favorablemente galvanizado por inmersión en caliente o recubrimiento anticorrosivo de larga duración).Adicional: de igual manera, si cuentan con el plástico rompevientos (malla sombra / rompevientos) también nos interesa cotizarlo.Sobre la instalación:De igual manera, si cuentan con el servicio de instalación, nos interesaría conocer el costo, pero en una cotización por separado (solo mano de obra, equipo, etc.).Agradeceré me envíen cotización con precios, tiempos de entrega y condiciones de pago.Quedo atento a su respuesta. Saludos. | lbalderas@emco.mx","cotizacion_mayoreo, busca_producto, precio, envio, contratista","Varilla/Acero, Madera",lbalderas@emco.mx
+1649,2026-02-13 00:20:38,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1648,2026-02-12 23:50:03,Mary Mejora,true,9,Necesito una cotización de mayoreo | un agente o persona | kteran@liquidtek.com.mx,"cotizacion_mayoreo, busca_producto",ninguno,kteran@liquidtek.com.mx
+1647,2026-02-12 23:47:56,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1646,2026-02-12 23:18:31,Mary Mejora,true,5,Solo estoy viendo,solo_viendo,ninguno,
+1645,2026-02-12 22:41:17,Mary Mejora,false,10,"Necesito una cotización de mayoreo | Del Instituto de Servicios Educativos y Pedagógicos de Baja California, Programas de Apoyo Educativo, si pueden enviar al correo leticiasalas23@edubc.mx, la cotización: 257 unidades, manguera 3/4"" 4 capas 30 mts. marca truper, por favor | al correo leticiasalas23@edubc.mx","cotizacion_mayoreo, busca_producto",ninguno,"leticiasalas23@edubc.mx, leticiasalas23@edubc.mx"
+1644,2026-02-12 22:22:13,Mary Mejora,true,11,"Necesito una cotización de mayoreo | 1450 sacos de yeso | 25,0000 pz de block | administracion@goldenconstruccion.com","cotizacion_mayoreo, busca_producto",Cemento/Concreto,administracion@goldenconstruccion.com
+1643,2026-02-12 20:31:30,Mary Mejora,true,5,Solo estoy viendo,solo_viendo,ninguno,
+1642,2026-02-12 18:23:46,Mary Mejora,true,11,"Necesito una cotización de mayoreo | Precio de cemento de 42 kg | Block 5"" | oicen.te@gmail.com","cotizacion_mayoreo, busca_producto, precio",Cemento/Concreto,oicen.te@gmail.com
+1641,2026-02-12 17:22:57,Mary Mejora,true,9,Necesito una cotización de mayoreo | Precio de bisagras de barril y las medidas que manejan | lauraesparza2883@gmail.com,"cotizacion_mayoreo, busca_producto, precio",Ferretería,lauraesparza2883@gmail.com
+1640,2026-02-12 16:56:35,Mary Mejora,false,9,"Necesito una cotización de mayoreo | Del Instituto de Servicios Educativos y Pedagógicos de Baja California, Programas de Apoyo Educativo, si pueden enviar al correo leticiasalas23@edubc.mx, la cotización: 257 unidades, manguera 3/4"" 4 capas 30 mts. marca truper, por favor | leticiasalas23@edubc.mx,","cotizacion_mayoreo, busca_producto",ninguno,"leticiasalas23@edubc.mx, leticiasalas23@edubc.mx"
+1639,2026-02-12 05:20:20,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1638,2026-02-12 05:12:14,Mary Mejora,true,10,Quiero facturar,"busca_producto, factura",ninguno,
+1637,2026-02-12 04:58:19,Mary Mejora,false,9,Necesito una cotización de mayoreo | OCUPO 35 KG DE ALAMBRON A MENUDEO | alonsopachecojosue@gmail.com,"cotizacion_mayoreo, busca_producto",ninguno,alonsopachecojosue@gmail.com
+1636,2026-02-12 03:43:25,Mary Mejora,true,10,"Tengo problemas con el sitio | Lavadora de ropa , precios y modelos | Lavadkra","problema_sitio, precio",ninguno,
+1635,2026-02-12 02:53:41,Mary Mejora,false,9,Necesito una cotización de mayoreo | En cuanto esta la hoja de foam 2 pulgadas | Clar0993loreto@gmail.com,"cotizacion_mayoreo, busca_producto",ninguno,clar0993loreto@gmail.com
+1634,2026-02-12 02:13:26,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1633,2026-02-12 02:01:07,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1632,2026-02-12 00:19:10,Mary Mejora,false,4,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1631,2026-02-11 23:45:44,Mary Mejora,false,4,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1630,2026-02-11 23:44:12,Mary Mejora,false,10,Me interesan los talleres gratuitos | Tal vez para otro taller | reyna.corral@gmail.com,talleres_clinicas,ninguno,reyna.corral@gmail.com
+1629,2026-02-11 20:10:47,Mary Mejora,true,9,Necesito una cotización de mayoreo | 2 toneladas de varilla 3/8 | mezajede@gmail.com,"cotizacion_mayoreo, busca_producto",Varilla/Acero,mezajede@gmail.com
+1628,2026-02-11 20:08:49,Mary Mejora,true,5,Solo estoy viendo,solo_viendo,ninguno,
+1627,2026-02-11 19:02:18,Mary Mejora,false,6,Solo estoy viendo,solo_viendo,ninguno,
+1626,2026-02-11 18:56:45,Mary Mejora,false,5,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1625,2026-02-11 17:43:38,Mary Mejora,true,9,Necesito una cotización de mayoreo | cemento blanco | mariana.aguilar.a@gmail.com,"cotizacion_mayoreo, busca_producto",Cemento/Concreto,mariana.aguilar.a@gmail.com
+1624,2026-02-11 17:04:40,Mary Mejora,true,3,Quiero facturar,"busca_producto, factura",ninguno,
+1623,2026-02-11 16:46:42,Mary Mejora,false,9,"Necesito una cotización de mayoreo | buen dia, necesito porcelanato mate de 120x60 color gris para un interior de 160m2 | verania.parral@cessum.mx","cotizacion_mayoreo, busca_producto",Pisos/Loseta,verania.parral@cessum.mx
+1622,2026-02-11 14:14:52,Mary Mejora,false,4,Quiero facturar,"busca_producto, factura",ninguno,
+1621,2026-02-11 02:09:34,Mary Mejora,false,4,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1620,2026-02-11 02:05:57,Mary Mejora,false,10,"Necesito una cotización de mayoreo | centro de carga 12 circuitos squard d | jafo19@outlook.com | Calificación: 
+no pude usar la pagina para revisar la existencia de este material","cotizacion_mayoreo, busca_producto",ninguno,jafo19@outlook.com
+1619,2026-02-10 23:57:47,Mary Mejora,false,5,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1618,2026-02-10 23:57:47,Mary Mejora,true,2,,sin_clasificar,ninguno,
+1617,2026-02-10 22:15:58,Mary Mejora,true,9,Necesito una cotización de mayoreo | 20 sacos de cemento de emplaste cemequin | comprasmorcor@gmail.com,"cotizacion_mayoreo, busca_producto",Cemento/Concreto,comprasmorcor@gmail.com
+1616,2026-02-10 20:05:54,Mary Mejora,false,4,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
+1615,2026-02-10 19:17:38,Mary Mejora,true,9,Solo estoy viendo | Quiero ayuda/consejo para mi obra,"solo_viendo, busca_producto, contratista",ninguno,
+1614,2026-02-10 16:22:41,Mary Mejora,false,9,Necesito una cotización de mayoreo | Buen dia | tienes una sonda para drenaje electrica?,"cotizacion_mayoreo, busca_producto",Electricidad,
+1613,2026-02-10 02:33:29,Mary Mejora,false,10,Necesito una cotización de mayoreo | Cemento antihumedad CEMEX | elisita2703@gmail.com,"cotizacion_mayoreo, busca_producto",Cemento/Concreto,elisita2703@gmail.com
+1612,2026-02-10 01:30:07,Mary Mejora,true,5,Solo estoy viendo,solo_viendo,ninguno,
+1611,2026-02-10 00:51:20,Mary Mejora,false,10,Tengo problemas con el sitio | comprashha@hospitalha.com,problema_sitio,ninguno,comprashha@hospitalha.com
+1610,2026-02-10 00:50:42,Mary Mejora,false,8,Quiero facturar,"busca_producto, factura",ninguno,
+1609,2026-02-10 00:43:16,Mary Mejora,true,8,Tengo problemas con el sitio | Mesas,problema_sitio,ninguno,
+1608,2026-02-10 00:20:19,Mary Mejora,true,9,Necesito una cotización de mayoreo | 18 Mts loseta la más barata o un paquete que incluya cemenquin y boquilla | javierpicazo-_t@hotmail.com,"cotizacion_mayoreo, busca_producto",Pisos/Loseta,javierpicazo-_t@hotmail.com
+1607,2026-02-09 21:38:53,Mary Mejora,true,5,Solo estoy viendo,solo_viendo,ninguno,
+1606,2026-02-09 19:44:24,Mary Mejora,true,5,Solo estoy viendo,solo_viendo,ninguno,
+1605,2026-02-09 19:07:27,Mary Mejora,true,5,Solo estoy viendo,solo_viendo,ninguno,
+1604,2026-02-09 16:56:02,Mary Mejora,true,12,Necesito una cotización de mayoreo | Tienen estribos de 15 x 25 | 15 x 30 | Pero lo necesito peonto | Ni mandan nada,"cotizacion_mayoreo, busca_producto, envio",ninguno,
+1603,2026-02-09 16:00:06,Mary Mejora,true,9,Necesito una cotización de mayoreo | Block | Sanmaria1979@outlook.com,"cotizacion_mayoreo, busca_producto",Cemento/Concreto,sanmaria1979@outlook.com
+1602,2026-02-09 03:57:43,Mary Mejora,true,9,Necesito una cotización de mayoreo | 17 hojas de cartón de yeso 1/2 del economico | Vicelop75@gmail.com,"cotizacion_mayoreo, busca_producto",ninguno,vicelop75@gmail.com
 1601,2026-02-08 19:07:58,Mary Mejora,true,6,Tengo problemas con el sitio,problema_sitio,ninguno,
 1600,2026-02-08 19:00:53,Mary Mejora,false,6,Solo estoy viendo,solo_viendo,ninguno,
 1599,2026-02-08 18:29:16,Mary Mejora,true,9,Necesito una cotización de mayoreo | Sería una galón de pintura amarilla seguridad y rodillos y charola de pintura y maskingtape azul | rogelioespinozavega55@gmail.com,"cotizacion_mayoreo, busca_producto",Pintura,rogelioespinozavega55@gmail.com
@@ -1570,7 +1659,7 @@ Falla mucho",solo_viendo,ninguno,
 59,2025-10-18 15:47:38,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
 58,2025-10-18 15:17:13,Mary Mejora,true,8,Necesito una cotización de mayoreo | Nesecito el precio d la loseta más barata q tengan ocupo para una casa | Francosalcedorocio@gmail.com,"cotizacion_mayoreo, busca_producto, precio",Pisos/Loseta,francosalcedorocio@gmail.com
 57,2025-10-18 01:54:05,Mary Mejora,false,5,Solo estoy viendo,solo_viendo,ninguno,
-56,2025-10-18 01:24:44,Mary Mejora,true,10,Tengo problemas con el sitio | Necesito un termostato para un boyler electrico marca sinsa | Lo compre ahi con ustedes ya hace 2 años y no tienen la pieza que se quemo,"problema_sitio, busca_producto",Electricidad,
+56,2025-10-18 01:24:44,Mary Mejora,true,11,Tengo problemas con el sitio | Necesito un termostato para un boyler electrico marca sinsa | Lo compre ahi con ustedes ya hace 2 años y no tienen la pieza que se quemo | Calificación:,"problema_sitio, busca_producto",Electricidad,
 55,2025-10-18 00:58:53,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,
 54,2025-10-17 23:07:54,Mary Mejora,true,4,Cómo obtengo mi 10% de descuento?,sin_clasificar,ninguno,
 53,2025-10-17 21:02:12,Mary Mejora,true,3,Quiero ayuda/consejo para mi obra,"busca_producto, contratista",ninguno,

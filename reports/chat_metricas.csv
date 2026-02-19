@@ -1,41 +1,41 @@
 metrica,valor
-Total Sesiones,1582
-Total Mensajes,9915
-Emails Capturados,359
+Total Sesiones,1669
+Total Mensajes,10499
+Emails Capturados,389
 ---,---
-Mes 2026-02,89
+Mes 2026-02,176
 Mes 2026-01,412
 Mes 2025-12,363
 Mes 2025-11,491
 Mes 2025-10,227
 ---,---
-Lunes,203
-Domingo,182
-Sábado,213
-Viernes,234
-Jueves,232
-Miércoles,249
-Martes,269
+Martes,292
+Lunes,212
+Domingo,189
+Sábado,221
+Viernes,248
+Jueves,249
+Miércoles,258
 ---,---
-busca_producto,1010
-cotizacion_mayoreo,497
-contratista,414
-solo_viendo,315
-problema_sitio,162
-precio,106
-factura,96
-talleres_clinicas,49
+busca_producto,1071
+cotizacion_mayoreo,529
+contratista,438
+solo_viendo,334
+problema_sitio,168
+precio,112
+factura,101
+talleres_clinicas,52
 ubicacion,14
-envio,6
+envio,8
 ---,---
-Cemento/Concreto,94
-Varilla/Acero,62
-Pisos/Loseta,36
-Electricidad,33
-Madera,33
+Cemento/Concreto,103
+Varilla/Acero,67
+Pisos/Loseta,39
+Madera,35
+Electricidad,34
 Plomería,28
 Pintura,17
-Ferretería,11
+Ferretería,12
 Arena/Grava,11
 Vigueta/Estructura,10
 Herramientas,5

@@ -1,5 +1,5 @@
 import { BaseTask } from './base-task';
-import { config } from '../config';
+import { config, getEmailsForTask } from '../config';
 import { logger } from '../utils/logger';
 import { sendEmail } from '../services/email';
 import { searchReadAll, readRecords, OdooRecord } from '../services/odoo';
@@ -167,7 +167,8 @@ export class OdooChatAnalysisTask extends BaseTask {
     logger.info(CTX, `Reports written to ${reportsDir}`);
 
     // ── 6. Send email summary ──────────────────────────────────────────────
-    if (config.marketingEmails.length > 0) {
+    const recipients = getEmailsForTask('chatAnalysis');
+    if (recipients.length > 0) {
       const html = this.buildEmailHtml(analysis);
       const attachments = [
         {
@@ -192,13 +193,15 @@ export class OdooChatAnalysisTask extends BaseTask {
         },
       ];
       await sendEmail({
-        to: config.marketingEmails,
+        to: recipients,
         subject: `📊 Reporte Semanal Chat proconsa.online — ${analysis.totalSessions} sesiones`,
         html,
         text: `Reporte semanal: ${analysis.totalSessions} sesiones, ${analysis.emailsCaptured.length} emails capturados`,
         attachments,
       });
-      logger.info(CTX, `Email sent to ${config.marketingEmails.length} recipient(s)`);
+      logger.info(CTX, `Email sent to ${recipients.length} recipient(s)`);
+    } else {
+      logger.warn(CTX, 'No email recipients configured (CHAT_ANALYSIS_EMAILS or MARKETING_EMAILS) — skipping email send');
     }
   }
 

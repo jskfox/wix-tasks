@@ -3,7 +3,8 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 
 const CTX = 'Odoo';
-const RPC_TIMEOUT_MS = parseInt(process.env.ODOO_RPC_TIMEOUT_MS || '120000', 10);
+// Read dynamically from settings DB via config getter
+function getRpcTimeout(): number { return config.odoo.rpcTimeoutMs; }
 
 let uid: number | null = null;
 
@@ -60,7 +61,7 @@ export async function authenticate(): Promise<number> {
   const client = commonClient();
   const result = await withTimeout(
     callRpc<number | false>(client, 'authenticate', [db, username, password, {}]),
-    RPC_TIMEOUT_MS,
+    getRpcTimeout(),
     'common.authenticate',
   );
 
@@ -85,7 +86,7 @@ export async function executeKw<T>(
   if (kwargs) params.push(kwargs);
 
   const label = `${model}.${method}`;
-  return withTimeout(callRpc<T>(client, 'execute_kw', params), RPC_TIMEOUT_MS, label);
+  return withTimeout(callRpc<T>(client, 'execute_kw', params), getRpcTimeout(), label);
 }
 
 // ── Convenience helpers ────────────────────────────────────────────────────

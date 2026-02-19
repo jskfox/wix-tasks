@@ -3,6 +3,7 @@ import { logger } from './utils/logger';
 import { registerTask, startAll, stopAll } from './scheduler';
 import { closePool } from './services/database';
 import { closeMssqlPool } from './services/mssql';
+import { closeSettingsDb } from './services/settings-db';
 import { startAdminServer } from './admin/server';
 
 // ── Tasks ────────────────────────────────────────────────────────────────────
@@ -11,6 +12,8 @@ import { AbandonedCartsTask } from './tasks/abandoned-carts';
 import { OdooChatAnalysisTask } from './tasks/odoo-chat-analysis';
 import { OdooChatLeadsTask } from './tasks/odoo-chat-leads';
 import { OdooInventorySyncTask } from './tasks/odoo-inventory-sync';
+import { OdooPriceSyncTask } from './tasks/odoo-price-sync';
+import { ErpPostgresSyncTask } from './tasks/erp-postgres-sync';
 
 const CTX = 'Main';
 
@@ -28,6 +31,8 @@ async function main(): Promise<void> {
   registerTask(new OdooChatLeadsTask());
   registerTask(new OdooInventorySyncTask('full'));       // Daily at 4:00 AM
   registerTask(new OdooInventorySyncTask('stock-only')); // Every hour at :15
+  registerTask(new OdooPriceSyncTask());                 // Every hour at :45
+  registerTask(new ErpPostgresSyncTask());              // Every 30 min 6am-9pm
 
   // Start the scheduler
   startAll();
@@ -42,6 +47,7 @@ async function main(): Promise<void> {
 function shutdown(signal: string): void {
   logger.info(CTX, `Received ${signal} — shutting down...`);
   stopAll();
+  closeSettingsDb();
   Promise.all([closePool(), closeMssqlPool()])
     .then(() => {
       logger.info(CTX, 'Shutdown complete');

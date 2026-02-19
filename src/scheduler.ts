@@ -1,8 +1,25 @@
 import cron from 'node-cron';
+import { Cron } from 'croner';
 import { logger } from './utils/logger';
 import { BaseTask } from './tasks/base-task';
+import { getSetting, updateSetting } from './services/settings-db';
 
 const CTX = 'Scheduler';
+
+// ── Task state persistence helpers ───────────────────────────────────────────
+
+/** Load task enabled state from SQLite (default: true if not found) */
+function loadTaskEnabled(taskName: string): boolean {
+  const key = `task.${taskName}.enabled`;
+  const value = getSetting(key, 'true');
+  return value === 'true';
+}
+
+/** Save task enabled state to SQLite */
+function saveTaskEnabled(taskName: string, enabled: boolean): void {
+  const key = `task.${taskName}.enabled`;
+  updateSetting(key, enabled ? 'true' : 'false', 'tasks', `Enable/disable ${taskName} task`);
+}
 
 // ── Execution history entry ──────────────────────────────────────────────────
 
@@ -25,6 +42,7 @@ export interface TaskState {
   running: boolean;
   lastRun: TaskRunEntry | null;
   history: TaskRunEntry[];  // most recent first, capped
+  nextRun: string | null;   // ISO timestamp of next scheduled execution
 }
 
 const MAX_HISTORY = 50;
@@ -83,6 +101,8 @@ async function executeTask(entry: RegisteredTask): Promise<TaskRunEntry> {
     return run;
   } finally {
     state.running = false;
+    // Recompute next run after execution
+    state.nextRun = state.enabled ? computeNextRun(state.cronExpression, state.timezone) : null;
   }
 }
 
@@ -90,6 +110,18 @@ function pushHistory(state: TaskState, run: TaskRunEntry): void {
   state.lastRun = run;
   state.history.unshift(run);
   if (state.history.length > MAX_HISTORY) state.history.length = MAX_HISTORY;
+}
+
+/** Compute next scheduled execution time for a cron expression in a given timezone */
+function computeNextRun(cronExpr: string, tz: string): string | null {
+  try {
+    const job = new Cron(cronExpr, { timezone: tz });
+    const next = job.nextRun();
+    return next ? next.toISOString() : null;
+  } catch (err) {
+    logger.error(CTX, `Failed to compute next run for cron "${cronExpr}": ${(err as Error).message}`);
+    return null;
+  }
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -100,15 +132,19 @@ export function registerTask(task: BaseTask): void {
     return;
   }
 
+  // Load persisted enabled state from SQLite (default: true)
+  const persistedEnabled = loadTaskEnabled(task.name);
+
   const state: TaskState = {
     name: task.name,
     description: task.description,
     cronExpression: task.cronExpression,
     timezone: task.timezone,
-    enabled: true,
+    enabled: persistedEnabled,
     running: false,
     lastRun: null,
     history: [],
+    nextRun: computeNextRun(task.cronExpression, task.timezone),
   };
 
   const entry: RegisteredTask = { task, job: null as unknown as cron.ScheduledTask, state };
@@ -124,11 +160,16 @@ export function registerTask(task: BaseTask): void {
 }
 
 export function startAll(): void {
-  for (const [name, { job }] of registeredTasks) {
-    job.start();
-    logger.info(CTX, `Started task: "${name}"`);
+  for (const [name, { job, state }] of registeredTasks) {
+    if (state.enabled) {
+      job.start();
+      logger.info(CTX, `Started task: "${name}"`);
+    } else {
+      logger.info(CTX, `Task "${name}" disabled — not starting`);
+    }
   }
-  logger.info(CTX, `All ${registeredTasks.size} task(s) running`);
+  const enabledCount = Array.from(registeredTasks.values()).filter(e => e.state.enabled).length;
+  logger.info(CTX, `${enabledCount}/${registeredTasks.size} task(s) running`);
 }
 
 export function stopAll(): void {
@@ -171,6 +212,7 @@ export function updateCron(name: string, newCron: string): void {
 
   entry.job.stop();
   entry.state.cronExpression = newCron;
+  entry.state.nextRun = entry.state.enabled ? computeNextRun(newCron, entry.state.timezone) : null;
 
   entry.job = cron.schedule(
     newCron,
@@ -192,5 +234,10 @@ export function setTaskEnabled(name: string, enabled: boolean): void {
     entry.job.stop();
   }
   entry.state.enabled = enabled;
+  entry.state.nextRun = enabled ? computeNextRun(entry.state.cronExpression, entry.state.timezone) : null;
+  
+  // Persist to SQLite
+  saveTaskEnabled(name, enabled);
+  
   logger.info(CTX, `Task "${name}" ${enabled ? 'enabled' : 'disabled'}`);
 }

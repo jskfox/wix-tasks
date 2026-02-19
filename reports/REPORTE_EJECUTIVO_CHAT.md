@@ -1,6 +1,6 @@
 # REPORTE EJECUTIVO - Análisis de Chat proconsa.online
 
-**Fecha de generación:** 2026-02-16 15:00
+**Fecha de generación:** 2026-02-17 02:05
 
 **Período analizado:** 2025-10 a 2026-02
 
@@ -10,11 +10,11 @@
 
 | Métrica | Valor |
 |---|---|
-| Total de sesiones de chat | **1582** |
-| Total de mensajes | **9915** |
+| Total de sesiones de chat | **1669** |
+| Total de mensajes | **10.499** |
 | Promedio mensajes por sesión | **6.3** |
-| Emails capturados (únicos) | **359** |
-| Tasa de captura de email | **22.7%** |
+| Emails capturados (únicos) | **389** |
+| Tasa de captura de email | **23.3%** |
 
 ## 2. TENDENCIA MENSUAL
 
@@ -24,35 +24,35 @@
 | 2025-11 | 491 | 📈 +116% |
 | 2025-12 | 363 | 📉 -26% |
 | 2026-01 | 412 | 📈 +13% |
-| 2026-02 | 89 | 📉 -78% |
+| 2026-02 | 176 | 📉 -57% |
 
 ## 3. INTENCIONES DE LOS VISITANTES
 
 | Intención | Sesiones | % |
 |---|---|---|
-| 🔍 Busca Producto | 1010 | 63.8% |
-| 💰 Cotización de Mayoreo | 497 | 31.4% |
-| 🏗️ Contratista/Constructor | 414 | 26.2% |
-| 👀 Solo Viendo | 315 | 19.9% |
-| ⚠️ Problemas con el Sitio | 162 | 10.2% |
-| 💲 Consulta de Precio | 106 | 6.7% |
-| 🧾 Facturación | 96 | 6.1% |
-| 🎓 Talleres/Clínicas | 49 | 3.1% |
-| 📍 Ubicación | 14 | 0.9% |
-| 🚚 Envío/Entrega | 6 | 0.4% |
+| 🔍 Busca Producto | 1071 | 64.2% |
+| 💰 Cotización de Mayoreo | 529 | 31.7% |
+| 🏗️ Contratista/Constructor | 438 | 26.2% |
+| 👀 Solo Viendo | 334 | 20.0% |
+| ⚠️ Problemas con el Sitio | 168 | 10.1% |
+| 💲 Consulta de Precio | 112 | 6.7% |
+| 🧾 Facturación | 101 | 6.1% |
+| 🎓 Talleres/Clínicas | 52 | 3.1% |
+| 📍 Ubicación | 14 | 0.8% |
+| 🚚 Envío/Entrega | 8 | 0.5% |
 
 ## 4. PRODUCTOS MÁS MENCIONADOS
 
 | Categoría | Menciones | % |
 |---|---|---|
-| Cemento/Concreto | 94 | 5.9% |
-| Varilla/Acero | 62 | 3.9% |
-| Pisos/Loseta | 36 | 2.3% |
-| Electricidad | 33 | 2.1% |
-| Madera | 33 | 2.1% |
-| Plomería | 28 | 1.8% |
-| Pintura | 17 | 1.1% |
-| Ferretería | 11 | 0.7% |
+| Cemento/Concreto | 103 | 6.2% |
+| Varilla/Acero | 67 | 4.0% |
+| Pisos/Loseta | 39 | 2.3% |
+| Madera | 35 | 2.1% |
+| Electricidad | 34 | 2.0% |
+| Plomería | 28 | 1.7% |
+| Pintura | 17 | 1.0% |
+| Ferretería | 12 | 0.7% |
 | Arena/Grava | 11 | 0.7% |
 | Vigueta/Estructura | 10 | 0.6% |
 | Herramientas | 5 | 0.3% |

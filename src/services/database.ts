@@ -8,10 +8,13 @@ let pool: Pool | null = null;
 
 export function getPool(overrideConfig?: PoolConfig): Pool {
   if (!pool) {
+    // Read config values at pool creation time (they come from SQLite via getters)
+    // IMPORTANT: These values are evaluated once when the pool is created.
+    // If you change pg.port or pg.database in settings.db, you must restart the app.
     const pgConfig: PoolConfig = overrideConfig ?? {
       host: config.pg.host,
-      port: config.pg.port,
-      database: config.pg.database,
+      port: config.pg.port,        // Dynamic getter from SQLite
+      database: config.pg.database, // Dynamic getter from SQLite
       user: config.pg.user,
       password: config.pg.password,
       max: 10,

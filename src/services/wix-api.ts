@@ -36,10 +36,11 @@ async function wixFetch<T = unknown>(options: WixRequestOptions): Promise<T> {
 // ─── Abandoned Checkouts ───────────────────────────────────────────────────────
 
 export interface AbandonedCheckoutBuyerInfo {
+  visitorId?: string;
+  memberId?: string;
+  userId?: string;
+  contactId?: string;
   email?: string;
-  phone?: string;
-  firstName?: string;
-  lastName?: string;
 }
 
 export interface AbandonedCheckoutLineItem {
@@ -51,29 +52,35 @@ export interface AbandonedCheckoutLineItem {
   quantity?: number;
   price?: { amount?: string; formattedAmount?: string };
   image?: { url?: string };
+  physicalProperties?: {
+    sku?: string;
+    weight?: number;
+    shippable?: boolean;
+  };
 }
 
 export interface AbandonedCheckout {
-  _id: string;
-  _createdDate: string;
-  _updatedDate?: string;
-  status?: string;
+  id: string;
+  createdDate: string;
+  updatedDate?: string;
+  checkoutId?: string;
+  cartId?: string;
+  status?: 'ABANDONED' | 'RECOVERED';
+  buyerLanguage?: string;
   checkoutUrl?: string;
   buyerInfo?: AbandonedCheckoutBuyerInfo;
   contactDetails?: {
     firstName?: string;
     lastName?: string;
     phone?: string;
-    email?: string;
-    address?: {
-      city?: string;
-      country?: string;
-    };
+    company?: string;
   };
+  currency?: string;
+  totalPrice?: { amount?: string; convertedAmount?: string; formattedAmount?: string; formattedConvertedAmount?: string };
+  subtotalPrice?: { amount?: string; convertedAmount?: string; formattedAmount?: string; formattedConvertedAmount?: string };
   lineItems?: AbandonedCheckoutLineItem[];
-  subtotal?: { amount?: string; formattedAmount?: string };
-  total?: { amount?: string; formattedAmount?: string };
-  activities?: Array<{ type?: string; timestamp?: string }>;
+  activities?: Array<{ createdDate?: string; type?: string }>;
+  checkoutRecoveredDate?: string;
 }
 
 interface QueryAbandonedCheckoutsResponse {
@@ -106,6 +113,7 @@ export interface WixProduct {
   id: string;
   name?: string;
   sku?: string;
+  inventoryItemId?: string;
   variants?: Array<{
     id: string;
     sku?: string;
@@ -121,18 +129,63 @@ interface QueryProductsResponse {
   metadata?: { count?: number; offset?: number; total?: number };
 }
 
-export async function queryProductsBySku(skus: string[]): Promise<WixProduct[]> {
-  // Uses Stores Catalog V1 query
+/**
+ * Query all products from Wix store with pagination.
+ * Returns products with their SKU and inventoryItemId for inventory updates.
+ */
+export async function queryAllWixProducts(): Promise<WixProduct[]> {
   const allProducts: WixProduct[] = [];
-  // Query in batches of 100
-  for (let i = 0; i < skus.length; i += 100) {
-    const batch = skus.slice(i, i + 100);
+  let offset = 0;
+  const limit = 100;
+
+  logger.info(CTX, 'Fetching all products from Wix...');
+
+  while (true) {
     const result = await wixFetch<QueryProductsResponse>({
       method: 'POST',
       path: '/stores/v1/products/query',
       body: {
         query: {
-          filter: { sku: { $in: batch } },
+          // Empty filter string = all products
+          filter: '{}',
+          paging: { limit, offset },
+        },
+        includeVariants: true,
+      },
+    });
+
+    const products = result.products || [];
+    allProducts.push(...products);
+
+    logger.debug(CTX, `  Fetched ${products.length} products (offset=${offset}, total so far=${allProducts.length})`);
+
+    // If we got fewer than limit, we've reached the end
+    if (products.length < limit) break;
+    offset += limit;
+  }
+
+  logger.info(CTX, `Fetched ${allProducts.length} total products from Wix`);
+  return allProducts;
+}
+
+/**
+ * Query products by SKU from Wix store.
+ * Filter must be a JSON string as per Wix API v1 requirements.
+ */
+export async function queryProductsBySku(skus: string[]): Promise<WixProduct[]> {
+  const allProducts: WixProduct[] = [];
+
+  // Query in batches of 100
+  for (let i = 0; i < skus.length; i += 100) {
+    const batch = skus.slice(i, i + 100);
+    // Wix API v1 requires filter as a JSON string, not an object
+    const filterObj = { sku: { $in: batch } };
+    const result = await wixFetch<QueryProductsResponse>({
+      method: 'POST',
+      path: '/stores/v1/products/query',
+      body: {
+        query: {
+          filter: JSON.stringify(filterObj),
           paging: { limit: 100 },
         },
         includeVariants: true,
@@ -161,20 +214,18 @@ export async function updateProductVariantPrice(
 // ─── Inventory ──────────────────────────────────────────────────────────────────
 
 export async function updateInventoryVariants(
-  productId: string,
+  inventoryItemId: string,
   trackQuantity: boolean,
   variants: Array<{ variantId: string; quantity?: number; inStock?: boolean }>,
 ): Promise<void> {
-  // TODO: UNCOMMENT WHEN READY FOR PRODUCTION — Wix write operation
-  // await wixFetch({
-  //   method: 'PATCH',
-  //   path: `/stores/v2/inventoryItems/${productId}`,
-  //   body: {
-  //     inventoryItem: {
-  //       trackQuantity,
-  //       variants,
-  //     },
-  //   },
-  // });
-  logger.info(CTX, `[DRY-RUN] Would update inventory for product ${productId}`, { trackQuantity, variants });
+  await wixFetch({
+    method: 'PATCH',
+    path: `/stores/v2/inventoryItems/${inventoryItemId}`,
+    body: {
+      inventoryItem: {
+        trackQuantity,
+        variants,
+      },
+    },
+  });
 }
