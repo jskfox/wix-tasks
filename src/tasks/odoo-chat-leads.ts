@@ -160,16 +160,23 @@ export class OdooChatLeadsTask extends BaseTask {
     fs.mkdirSync(reportsDir, { recursive: true });
     const now = new Date();
 
-    // ── 1. Fetch sessions ──────────────────────────────────────────────────
-    logger.info(CTX, `Fetching livechat sessions for channel ${channelId}...`);
+    // ── 1. Fetch sessions from last 7 days ────────────────────────────────
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const sinceStr = sevenDaysAgo.toISOString().slice(0, 19).replace('T', ' ');
+    const periodLabel = `${sevenDaysAgo.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })} – ${now.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+
+    logger.info(CTX, `Fetching livechat sessions for channel ${channelId} since ${sinceStr}...`);
     const sessions = await searchReadAll(
       'discuss.channel',
-      [['livechat_channel_id', '=', channelId]],
+      [
+        ['livechat_channel_id', '=', channelId],
+        ['create_date', '>=', sinceStr],
+      ],
       ['name', 'create_date', 'livechat_operator_id', 'anonymous_name',
        'country_id', 'message_ids', 'livechat_active'],
       { order: 'create_date desc' },
     );
-    logger.info(CTX, `Fetched ${sessions.length} sessions`);
+    logger.info(CTX, `Fetched ${sessions.length} sessions (last 7 days)`);
 
     // ── 2. Fetch messages ──────────────────────────────────────────────────
     const allMsgIds = new Set<number>();
@@ -344,14 +351,14 @@ export class OdooChatLeadsTask extends BaseTask {
 
     // ── 7. Write Markdown report ───────────────────────────────────────────
     const mdPath = path.join(reportsDir, 'REPORTE_SEGUIMIENTO_MARKETING.md');
-    fs.writeFileSync(mdPath, this.buildMarkdown(leadsWithEmail, leadsNoEmail, now), 'utf-8');
+    fs.writeFileSync(mdPath, this.buildMarkdown(leadsWithEmail, leadsNoEmail, now, periodLabel), 'utf-8');
     logger.info(CTX, `Reports written to ${reportsDir}`);
 
     // ── 8. Email summary to marketing ──────────────────────────────────────
     const recipients = getEmailsForTask('chatLeads');
     if (recipients.length > 0) {
       const priorityCounts = this.countByPriority(leadsWithEmail);
-      const html = this.buildEmailHtml(leadsWithEmail, priorityCounts, now);
+      const html = this.buildEmailHtml(leadsWithEmail, priorityCounts, now, periodLabel);
       const attachments = [
         {
           filename: 'LEADS_SEGUIMIENTO_MARKETING.csv',
@@ -376,9 +383,9 @@ export class OdooChatLeadsTask extends BaseTask {
       ];
       await sendEmail({
         to: recipients,
-        subject: `🎯 Leads del Chat — ${leadsWithEmail.length} prospectos (${priorityCounts['🔴 MÁXIMA'] || 0} urgentes)`,
+        subject: `🎯 Leads del Chat — ${leadsWithEmail.length} prospectos (${priorityCounts['🔴 MÁXIMA'] || 0} urgentes) · ${periodLabel}`,
         html,
-        text: `Reporte de leads: ${leadsWithEmail.length} con email, ${priorityCounts['🔴 MÁXIMA'] || 0} prioridad máxima`,
+        text: `Reporte de leads (${periodLabel}): ${leadsWithEmail.length} con email, ${priorityCounts['🔴 MÁXIMA'] || 0} prioridad máxima`,
         attachments,
       });
       logger.info(CTX, `Email sent to ${recipients.length} recipient(s)`);
@@ -410,7 +417,7 @@ export class OdooChatLeadsTask extends BaseTask {
 
   // ── Markdown report ────────────────────────────────────────────────────────
 
-  private buildMarkdown(leadsWithEmail: Lead[], leadsNoEmail: Lead[], now: Date): string {
+  private buildMarkdown(leadsWithEmail: Lead[], leadsNoEmail: Lead[], now: Date, periodLabel: string): string {
     const pCounts = this.countByPriority(leadsWithEmail);
     const typeCounts: Record<string, number> = {};
     let existingClients = 0;
@@ -421,7 +428,8 @@ export class OdooChatLeadsTask extends BaseTask {
 
     let md = `# REPORTE DE SEGUIMIENTO DE LEADS — Equipo de Marketing\n`;
     md += `## Chat proconsa.online\n\n`;
-    md += `**Generado:** ${now.toISOString().slice(0, 16).replace('T', ' ')} UTC\n\n---\n\n`;
+    md += `**Generado:** ${now.toISOString().slice(0, 16).replace('T', ' ')} UTC\n`;
+    md += `**Período:** Últimos 7 días (${periodLabel})\n\n---\n\n`;
 
     md += `## RESUMEN\n\n| Métrica | Valor |\n|---|---|\n`;
     md += `| Leads con email | **${leadsWithEmail.length}** |\n`;
@@ -461,7 +469,7 @@ export class OdooChatLeadsTask extends BaseTask {
 
   // ── HTML email ─────────────────────────────────────────────────────────────
 
-  private buildEmailHtml(leads: Lead[], pCounts: Record<string, number>, now: Date): string {
+  private buildEmailHtml(leads: Lead[], pCounts: Record<string, number>, now: Date, periodLabel: string): string {
     const dateStr = now.toLocaleDateString('es-MX', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     });
@@ -487,6 +495,7 @@ export class OdooChatLeadsTask extends BaseTask {
         <div style="background:#1a1a2e;color:white;padding:24px 32px;">
           <h1 style="margin:0;font-size:20px;">🎯 Reporte de Leads — Chat proconsa.online</h1>
           <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">${dateStr}</p>
+          <p style="margin:4px 0 0;opacity:0.65;font-size:12px;">Período: últimos 7 días (${periodLabel})</p>
         </div>
         <div style="padding:24px 32px;">
           <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px;">

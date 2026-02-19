@@ -100,16 +100,25 @@ export class OdooChatAnalysisTask extends BaseTask {
     const reportsDir = path.resolve(config.odoo.reportsDir);
     fs.mkdirSync(reportsDir, { recursive: true });
 
-    // ── 1. Fetch all livechat sessions ─────────────────────────────────────
-    logger.info(CTX, `Fetching livechat sessions for channel ${channelId}...`);
+    // ── 1. Fetch livechat sessions from last 7 days ────────────────────────
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    // Odoo expects UTC datetime string in format 'YYYY-MM-DD HH:MM:SS'
+    const sinceStr = sevenDaysAgo.toISOString().slice(0, 19).replace('T', ' ');
+    const periodLabel = `${sevenDaysAgo.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })} – ${now.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+
+    logger.info(CTX, `Fetching livechat sessions for channel ${channelId} since ${sinceStr}...`);
     const sessions = await searchReadAll(
       'discuss.channel',
-      [['livechat_channel_id', '=', channelId]],
+      [
+        ['livechat_channel_id', '=', channelId],
+        ['create_date', '>=', sinceStr],
+      ],
       ['name', 'create_date', 'livechat_operator_id', 'anonymous_name',
        'country_id', 'message_ids', 'livechat_active'],
       { order: 'create_date desc' },
     );
-    logger.info(CTX, `Fetched ${sessions.length} sessions`);
+    logger.info(CTX, `Fetched ${sessions.length} sessions (last 7 days)`);
 
     // ── 2. Collect and fetch all messages ──────────────────────────────────
     const allMsgIds = new Set<number>();
@@ -163,13 +172,13 @@ export class OdooChatAnalysisTask extends BaseTask {
 
     // ── 5. Write Markdown report ───────────────────────────────────────────
     const mdPath = path.join(reportsDir, 'REPORTE_EJECUTIVO_CHAT.md');
-    fs.writeFileSync(mdPath, this.buildMarkdown(analysis), 'utf-8');
+    fs.writeFileSync(mdPath, this.buildMarkdown(analysis, periodLabel), 'utf-8');
     logger.info(CTX, `Reports written to ${reportsDir}`);
 
     // ── 6. Send email summary ──────────────────────────────────────────────
     const recipients = getEmailsForTask('chatAnalysis');
     if (recipients.length > 0) {
-      const html = this.buildEmailHtml(analysis);
+      const html = this.buildEmailHtml(analysis, periodLabel);
       const attachments = [
         {
           filename: 'chat_conversaciones_detalle.csv',
@@ -194,9 +203,9 @@ export class OdooChatAnalysisTask extends BaseTask {
       ];
       await sendEmail({
         to: recipients,
-        subject: `📊 Reporte Semanal Chat proconsa.online — ${analysis.totalSessions} sesiones`,
+        subject: `📊 Reporte Semanal Chat proconsa.online — ${analysis.totalSessions} sesiones (${periodLabel})`,
         html,
-        text: `Reporte semanal: ${analysis.totalSessions} sesiones, ${analysis.emailsCaptured.length} emails capturados`,
+        text: `Reporte semanal (${periodLabel}): ${analysis.totalSessions} sesiones, ${analysis.emailsCaptured.length} emails capturados`,
         attachments,
       });
       logger.info(CTX, `Email sent to ${recipients.length} recipient(s)`);
@@ -314,12 +323,11 @@ export class OdooChatAnalysisTask extends BaseTask {
 
   // ── Markdown report builder ────────────────────────────────────────────────
 
-  private buildMarkdown(a: AnalysisResult): string {
+  private buildMarkdown(a: AnalysisResult, periodLabel: string): string {
     const now = new Date();
-    const months = Object.keys(a.sessionsByMonth).sort();
     let md = `# REPORTE EJECUTIVO - Análisis de Chat proconsa.online\n\n`;
     md += `**Fecha de generación:** ${now.toISOString().slice(0, 16).replace('T', ' ')}\n\n`;
-    md += `**Período analizado:** ${months[0]} a ${months[months.length - 1]}\n\n---\n\n`;
+    md += `**Período analizado:** Últimos 7 días (${periodLabel})\n\n---\n\n`;
 
     md += `## 1. RESUMEN EJECUTIVO\n\n| Métrica | Valor |\n|---|---|\n`;
     md += `| Total de sesiones de chat | **${a.totalSessions.toLocaleString()}** |\n`;
@@ -328,17 +336,10 @@ export class OdooChatAnalysisTask extends BaseTask {
     md += `| Emails capturados (únicos) | **${a.emailsCaptured.length}** |\n`;
     md += `| Tasa de captura de email | **${(a.emailsCaptured.length / Math.max(a.totalSessions, 1) * 100).toFixed(1)}%** |\n\n`;
 
-    md += `## 2. TENDENCIA MENSUAL\n\n| Mes | Sesiones | Tendencia |\n|---|---|---|\n`;
-    let prev = 0;
-    for (const m of months) {
-      const c = a.sessionsByMonth[m];
-      let trend = '';
-      if (prev > 0) {
-        const pct = ((c - prev) / prev) * 100;
-        trend = pct > 0 ? `📈 +${pct.toFixed(0)}%` : `📉 ${pct.toFixed(0)}%`;
-      }
-      md += `| ${m} | ${c} | ${trend} |\n`;
-      prev = c;
+    md += `## 2. SESIONES POR DÍA DE LA SEMANA\n\n| Día | Sesiones |\n|---|---|\n`;
+    for (const day of WEEKDAYS) {
+      const c = a.sessionsByWeekday[day] || 0;
+      if (c > 0) md += `| ${day} | ${c} |\n`;
     }
 
     md += `\n## 3. INTENCIONES DE LOS VISITANTES\n\n| Intención | Sesiones | % |\n|---|---|---|\n`;
@@ -364,7 +365,7 @@ export class OdooChatAnalysisTask extends BaseTask {
 
   // ── HTML email builder ─────────────────────────────────────────────────────
 
-  private buildEmailHtml(a: AnalysisResult): string {
+  private buildEmailHtml(a: AnalysisResult, periodLabel: string): string {
     const dateStr = new Date().toLocaleDateString('es-MX', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     });
@@ -387,6 +388,7 @@ export class OdooChatAnalysisTask extends BaseTask {
         <div style="background:#1a1a2e;color:white;padding:24px 32px;">
           <h1 style="margin:0;font-size:20px;">📊 Reporte Semanal — Chat proconsa.online</h1>
           <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">${dateStr}</p>
+          <p style="margin:4px 0 0;opacity:0.65;font-size:12px;">Período: últimos 7 días (${periodLabel})</p>
         </div>
         <div style="padding:24px 32px;">
           <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px;">
