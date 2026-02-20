@@ -337,10 +337,22 @@ async function sendSyncReport(opts: {
     .stat{background:#fff;border-radius:8px;padding:14px 20px;flex:1;min-width:130px;border-left:4px solid #4f46e5;box-shadow:0 1px 3px rgba(0,0,0,.08)}
     .stat.warn{border-color:#f59e0b}.stat.danger{border-color:#ef4444}.stat.ok{border-color:#10b981}
     .stat-val{font-size:24px;font-weight:700;line-height:1}.stat-lbl{font-size:11px;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
-    h2{font-size:15px;font-weight:600;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid #e5e7eb}
-    table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:24px;font-size:13px}
-    th{background:#f8fafc;text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb}
-    td{padding:9px 12px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+    details{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:12px;overflow:hidden}
+    details[open] summary{border-bottom:1px solid #e5e7eb}
+    summary{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer;user-select:none;list-style:none;font-size:14px;font-weight:600}
+    summary::-webkit-details-marker{display:none}
+    .sec-title{display:flex;align-items:center;gap:10px}
+    .sec-icon{font-size:16px}
+    .sec-count{font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px}
+    .sec-count.blocked{background:#fef3c7;color:#92400e}
+    .sec-count.stock{background:#dbeafe;color:#1e40af}
+    .sec-count.price{background:#f3e8ff;color:#6b21a8}
+    .sec-count.fail{background:#fee2e2;color:#991b1b}
+    .chevron{font-size:12px;color:#9ca3af;transition:transform .2s}
+    details[open] .chevron{transform:rotate(180deg)}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{background:#f8fafc;text-align:left;padding:9px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb}
+    td{padding:9px 14px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
     tr:last-child td{border-bottom:none}
     .badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600}
     .badge-blocked{background:#fef3c7;color:#92400e}
@@ -351,56 +363,59 @@ async function sendSyncReport(opts: {
     .arrow{color:#9ca3af;margin:0 4px}
     .down{color:#ef4444;font-weight:600}
     .up{color:#10b981}
+    .empty{padding:14px 16px;color:#9ca3af;font-size:13px}
     .footer{text-align:center;font-size:11px;color:#9ca3af;margin-top:24px}
   `;
 
-  // ── Inventory table ──
-  const invRows = invReport.map(r => {
-    const badge = r.failed
-      ? '<span class="badge badge-fail">ERROR</span>'
-      : r.blocked
-        ? '<span class="badge badge-blocked">BLOQUEADO</span>'
-        : '<span class="badge badge-ok">OK</span>';
-    const stockChange = r.prevStock === r.newStock
-      ? `<span class="num">${r.newStock}</span>`
-      : `<span class="num">${r.prevStock}</span><span class="arrow">→</span><span class="num ${r.newStock < r.prevStock ? 'down' : 'up'}">${r.newStock}</span>`;
-    return `<tr>
-      <td class="num">${r.sku}</td>
-      <td>${r.name}</td>
-      <td>${stockChange}</td>
-      <td>${badge}</td>
-    </tr>`;
-  }).join('');
+  // ── Split inventory into blocked vs stock-changed ──
+  const blockedRows  = invReport.filter(r => r.blocked);
+  const stockRows    = invReport.filter(r => !r.blocked);
+  const priceDownRows = priceReport.filter(r => r.priceDown);
+  const priceUpRows   = priceReport.filter(r => !r.priceDown);
 
-  const invTable = invReport.length === 0 ? '<p style="color:#888;font-size:13px">Sin cambios de inventario.</p>' : `
-    <table>
-      <thead><tr><th>SKU</th><th>Producto</th><th>Stock (anterior → nuevo)</th><th>Estado</th></tr></thead>
-      <tbody>${invRows}</tbody>
-    </table>`;
+  const buildInvRow = (r: InvReportRow) => {
+    const badge = r.failed ? '<span class="badge badge-fail">ERROR</span>' : '';
+    const stockChange = `<span class="num">${r.prevStock}</span><span class="arrow">→</span><span class="num ${r.newStock < r.prevStock ? 'down' : 'up'}">${r.newStock}</span>`;
+    return `<tr><td class="num">${r.sku}</td><td>${r.name}</td><td>${stockChange}</td><td>${badge}</td></tr>`;
+  };
 
-  // ── Price table ──
-  const priceRows = priceReport.map(r => {
-    const badge = r.failed
-      ? '<span class="badge badge-fail">ERROR</span>'
-      : r.priceDown
-        ? '<span class="badge badge-down">↓ BAJÓ</span>'
-        : '<span class="badge badge-ok">↑ SUBIÓ</span>';
+  const buildPriceRow = (r: PriceReportRow) => {
+    const badge = r.failed ? '<span class="badge badge-fail">ERROR</span>' : '';
     const priceChange = `<span class="num">${fmt(r.prevPrice)}</span><span class="arrow">→</span><span class="num ${r.priceDown ? 'down' : 'up'}">${fmt(r.newPrice)}</span>`;
-    return `<tr>
-      <td class="num">${r.sku}</td>
-      <td>${r.name}</td>
-      <td>${priceChange}</td>
-      <td>${badge}</td>
-    </tr>`;
-  }).join('');
+    return `<tr><td class="num">${r.sku}</td><td>${r.name}</td><td>${priceChange}</td><td>${badge}</td></tr>`;
+  };
 
-  const priceTable = priceReport.length === 0 ? '<p style="color:#888;font-size:13px">Sin cambios de precio.</p>' : `
-    <table>
-      <thead><tr><th>SKU</th><th>Producto</th><th>Precio (anterior → nuevo)</th><th>Estado</th></tr></thead>
-      <tbody>${priceRows}</tbody>
-    </table>`;
+  const invHeaders   = '<thead><tr><th>SKU</th><th>Producto</th><th>Stock (anterior → nuevo)</th><th></th></tr></thead>';
+  const priceHeaders = '<thead><tr><th>SKU</th><th>Producto</th><th>Precio (anterior → nuevo)</th><th></th></tr></thead>';
+
+  const section = (id: string, icon: string, title: string, countClass: string, count: number, openByDefault: boolean, content: string) => `
+    <details id="${id}"${openByDefault ? ' open' : ''}>
+      <summary>
+        <span class="sec-title"><span class="sec-icon">${icon}</span>${title}<span class="sec-count ${countClass}">${count}</span></span>
+        <span class="chevron">▼</span>
+      </summary>
+      ${content}
+    </details>`;
+
+  const tableOrEmpty = (rows: string, headers: string, empty: string) =>
+    rows.length === 0
+      ? `<div class="empty">${empty}</div>`
+      : `<table>${headers}<tbody>${rows}</tbody></table>`;
 
   const totalFails = invFail + priceFail;
+
+  const secBlocked = section('sec-blocked', '⛔', 'Bloqueados (stock → 0)', 'blocked', blockedRows.length, true,
+    tableOrEmpty(blockedRows.map(buildInvRow).join(''), invHeaders, 'Ningún producto bloqueado.'));
+
+  const secStock = section('sec-stock', '📦', 'Cambios de Stock', 'stock', stockRows.length, true,
+    tableOrEmpty(stockRows.map(buildInvRow).join(''), invHeaders, 'Sin cambios de stock.'));
+
+  const secPriceDown = section('sec-price-down', '↓', 'Precios que Bajaron', 'blocked', priceDownRows.length, true,
+    tableOrEmpty(priceDownRows.map(buildPriceRow).join(''), priceHeaders, 'Ningún precio bajó.'));
+
+  const secPriceUp = section('sec-price-up', '↑', 'Precios que Subieron', 'price', priceUpRows.length, false,
+    tableOrEmpty(priceUpRows.map(buildPriceRow).join(''), priceHeaders, 'Ningún precio subió.'));
+
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${css}</style></head><body>
   <div class="wrap">
     <h1>Reporte de Sincronización Wix ${modeLabel}</h1>
@@ -414,11 +429,10 @@ async function sendSyncReport(opts: {
       <div class="stat"><div class="stat-val">${skipped}</div><div class="stat-lbl">Omitidos</div></div>
     </div>
 
-    <h2>Cambios de Inventario (${invReport.length})</h2>
-    ${invTable}
-
-    <h2>Cambios de Precio (${priceReport.length})</h2>
-    ${priceTable}
+    ${secBlocked}
+    ${secStock}
+    ${secPriceDown}
+    ${secPriceUp}
 
     <div class="footer">Generado automáticamente por wix-tasks · price-inventory-sync</div>
   </div>
