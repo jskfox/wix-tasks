@@ -115,6 +115,8 @@ export interface WixProduct {
   sku?: string;
   inventoryItemId?: string;
   priceData?: { price?: number; discountedPrice?: number };
+  ribbon?: string;
+  discount?: { type: string; value: number };
   stock?: { trackInventory?: boolean; quantity?: number; inStock?: boolean };
   variants?: Array<{
     id: string;
@@ -203,11 +205,18 @@ export async function queryProductsBySku(skus: string[]): Promise<WixProduct[]> 
 export async function updateProductPrice(
   productId: string,
   price: number,
+  opts?: {
+    ribbon?: string;
+    discount?: { type: 'PERCENT' | 'NONE'; value: number };
+  },
 ): Promise<void> {
+  const product: Record<string, unknown> = { priceData: { price } };
+  if (opts?.ribbon !== undefined) product.ribbon = opts.ribbon;
+  if (opts?.discount)            product.discount = opts.discount;
   await wixFetch({
     method: 'PATCH',
     path: `/stores/v1/products/${productId}`,
-    body: { product: { priceData: { price } } },
+    body: { product },
   });
 }
 

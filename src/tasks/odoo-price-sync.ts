@@ -2,6 +2,7 @@ import { BaseTask } from './base-task';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { mssqlQuery } from '../services/mssql';
+import { query as pgQuery } from '../services/database';
 import { executeKw, searchReadAll, OdooRecord } from '../services/odoo';
 
 const CTX = 'OdooPriceSync';
@@ -34,6 +35,13 @@ interface MssqlPriceRow {
   Articulo_Id: string;
   Articulo_Precio1: number;
   AxS_Costo_Actual: number;
+}
+
+// ── PostgreSQL promo row ──────────────────────────────────────────────────────
+
+interface PromoRow {
+  sku: string;
+  precio_promo: string;  // numeric from pg, includes taxes
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -84,6 +92,24 @@ export class OdooPriceSyncTask extends BaseTask {
       });
     }
 
+    // ── 1b. Fetch promo prices from PostgreSQL ──────────────────────────────
+    logger.info(CTX, `  Fetching promo prices from PostgreSQL (sucursal=${SUC_WIX})...`);
+    const promoResult = await pgQuery<PromoRow>(
+      `SELECT sku, precio_promo::text AS precio_promo
+       FROM public.promo
+       WHERE sucursal = $1
+       -- TODO: add when column exists: AND (vigencia IS NULL OR vigencia >= CURRENT_DATE)`,
+      [SUC_WIX],
+    );
+    const promoMap = new Map<string, number>();
+    for (const r of promoResult.rows) {
+      const precioPromo = parseFloat(r.precio_promo);
+      if (r.sku && !isNaN(precioPromo) && precioPromo > 0) {
+        promoMap.set(r.sku.trim(), precioPromo);
+      }
+    }
+    logger.info(CTX, `  PostgreSQL promo: ${promoMap.size} SKU(s) with promo price`);
+
     // ── 2. Fetch current Odoo prices ────────────────────────────────────
     logger.info(CTX, '  Fetching Odoo product prices...');
     const odooStart = Date.now();
@@ -104,9 +130,13 @@ export class OdooPriceSyncTask extends BaseTask {
       const erp = mssqlPrices.get(sku);
       if (!erp) continue;
 
+      // Promo overrides list_price; precio_promo already includes taxes
+      const promoPrice = promoMap.get(sku);
+      const expectedListPrice = promoPrice ?? erp.listPrice;
+
       const changes: Record<string, number> = {};
-      if (Math.abs((p.list_price as number || 0) - erp.listPrice) > 0.01) {
-        changes.list_price = erp.listPrice;
+      if (Math.abs((p.list_price as number || 0) - expectedListPrice) > 0.01) {
+        changes.list_price = expectedListPrice;
       }
       if (Math.abs((p.standard_price as number || 0) - erp.standardPrice) > 0.01) {
         changes.standard_price = erp.standardPrice;

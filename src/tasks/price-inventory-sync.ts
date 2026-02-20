@@ -19,6 +19,10 @@ interface StockPriceRow {
   precio: string | null;
   impuesto: string | null;
   ieps: string | null;
+  // Promo fields (NULL when SKU is not in promo table for this sucursal)
+  promo_precio_regular: string | null;
+  promo_precio_promo: string | null;
+  promo_descuento: string | null;
 }
 
 export class PriceInventorySyncTask extends BaseTask {
@@ -97,13 +101,19 @@ export class PriceInventorySyncTask extends BaseTask {
     const stockPriceResult = await query<StockPriceRow>(
       `SELECT
          s.sku,
-         SUM(s.existencia::numeric)  AS total_stock,
-         MAX(p.precio)               AS precio,
-         MAX(p.impuesto)             AS impuesto,
-         MAX(p.ieps)                 AS ieps
+         SUM(s.existencia::numeric)         AS total_stock,
+         MAX(p.precio)                      AS precio,
+         MAX(p.impuesto)                    AS impuesto,
+         MAX(p.ieps)                        AS ieps,
+         MAX(pr.precio_regular::numeric)    AS promo_precio_regular,
+         MAX(pr.precio_promo::numeric)      AS promo_precio_promo,
+         MAX(pr.descuento::int)             AS promo_descuento
        FROM maestro_precios_sucursal s
        LEFT JOIN maestro_precios_sucursal p
          ON p.sku = s.sku AND p.sucursal = $2
+       LEFT JOIN promo pr
+         ON pr.sku = s.sku AND pr.sucursal = $2
+         -- TODO: add when column exists: AND (pr.vigencia IS NULL OR pr.vigencia >= CURRENT_DATE)
        WHERE s.sucursal::text LIKE $1
          AND s.sku IN (${skuPlaceholders})
        GROUP BY s.sku`,
@@ -129,7 +139,8 @@ export class PriceInventorySyncTask extends BaseTask {
     // ══════════════════════════════════════════════════════════════════════════
     // STEP 3: Build stock + price map
     // ══════════════════════════════════════════════════════════════════════════
-    const stockMap = new Map<string, { totalStock: number; effectiveStock: number; precioFinal: number }>();
+    type PromoInfo = { precioRegular: number; precioPromo: number; descuento: number };
+    const stockMap = new Map<string, { totalStock: number; effectiveStock: number; precioFinal: number; promo: PromoInfo | null }>();
 
     for (const row of rowsToProcess) {
       const totalStock = parseFloat(row.total_stock) || 0;
@@ -146,10 +157,19 @@ export class PriceInventorySyncTask extends BaseTask {
         precioFinal = Math.round((subtotal + ivaMonto) * 100) / 100;
       }
 
-      stockMap.set(row.sku, { totalStock, effectiveStock, precioFinal });
+      // Promo: precio_regular and precio_promo already include taxes
+      const promoR = row.promo_precio_regular != null ? parseFloat(row.promo_precio_regular) : null;
+      const promoP = row.promo_precio_promo   != null ? parseFloat(row.promo_precio_promo)   : null;
+      const promoD = row.promo_descuento      != null ? parseInt(row.promo_descuento, 10)     : null;
+      const promo: PromoInfo | null = (promoR != null && promoP != null && promoD != null)
+        ? { precioRegular: Math.round(promoR * 100) / 100, precioPromo: Math.round(promoP * 100) / 100, descuento: promoD }
+        : null;
 
+      stockMap.set(row.sku, { totalStock, effectiveStock, precioFinal, promo });
+
+      const promoTag = promo ? ` | 🏷 PROMO ${promo.descuento}% ($${promo.precioPromo})` : '';
       const status = totalStock < minThreshold ? '⛔ BLOCKED' : '✓';
-      logger.debug(CTX, `  ${status} SKU: ${row.sku} | Stock: ${totalStock.toFixed(0)} → ${effectiveStock} | Precio: $${precioFinal}`);
+      logger.debug(CTX, `  ${status} SKU: ${row.sku} | Stock: ${totalStock.toFixed(0)} → ${effectiveStock} | Precio: $${precioFinal}${promoTag}`);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -181,7 +201,13 @@ export class PriceInventorySyncTask extends BaseTask {
       }> = [];
 
       // ── STEP 4b: Price updates ────────────────────────────────────────────
-      const priceItems: Array<{ productId: string; price: number; sku: string }> = [];
+      const priceItems: Array<{
+        productId: string;
+        price: number;  // base price sent to Wix (precio_regular for promo, precioFinal for regular)
+        sku: string;
+        ribbon: string;
+        discount: { type: 'PERCENT' | 'NONE'; value: number };
+      }> = [];
 
       // ── Report data ───────────────────────────────────────────────────────
       const invReport: InvReportRow[] = [];
@@ -214,14 +240,47 @@ export class PriceInventorySyncTask extends BaseTask {
           logger.warn(CTX, `⚠ SKU ${sku} has no inventoryItemId, skipping inventory update`);
         }
 
-        if (wixProduct.id && stockInfo.precioFinal > 0) {
-          const currentPrice = Math.round((wixProduct.priceData?.price ?? 0) * 100) / 100;
-          const newPrice = stockInfo.precioFinal; // already rounded to 2 decimals
-          if (currentPrice !== newPrice) {
-            priceItems.push({ productId: wixProduct.id, price: newPrice, sku });
-            priceReport.push({ sku, name: productName, prevPrice: currentPrice, newPrice, priceDown: newPrice < currentPrice, failed: false });
+        if (wixProduct.id) {
+          const { promo } = stockInfo;
+
+          // Determine expected Wix state
+          let expectedBasePrice: number;
+          let expectedRibbon: string;
+          let expectedDiscount: { type: 'PERCENT' | 'NONE'; value: number };
+          let reportNewPrice: number; // effective price the customer pays
+
+          if (promo) {
+            expectedBasePrice  = promo.precioRegular;
+            expectedRibbon     = 'PROMO';
+            expectedDiscount   = { type: 'PERCENT', value: promo.descuento };
+            reportNewPrice     = promo.precioPromo;
           } else {
-            logger.debug(CTX, `  = SKU: ${sku} | Precio sin cambio ($${newPrice}), omitiendo`);
+            if (stockInfo.precioFinal <= 0) continue;
+            expectedBasePrice  = stockInfo.precioFinal;
+            expectedRibbon     = '';
+            expectedDiscount   = { type: 'NONE', value: 0 };
+            reportNewPrice     = stockInfo.precioFinal;
+          }
+
+          // Compare current Wix state vs expected
+          const currentBasePrice     = Math.round((wixProduct.priceData?.price ?? 0) * 100) / 100;
+          const currentRibbon        = wixProduct.ribbon ?? '';
+          const currentDiscountType  = wixProduct.discount?.type  ?? 'NONE';
+          const currentDiscountValue = wixProduct.discount?.value ?? 0;
+
+          const needsUpdate =
+            currentBasePrice     !== expectedBasePrice ||
+            currentRibbon        !== expectedRibbon ||
+            currentDiscountType  !== expectedDiscount.type ||
+            currentDiscountValue !== expectedDiscount.value;
+
+          if (needsUpdate) {
+            priceItems.push({ productId: wixProduct.id, price: expectedBasePrice, sku, ribbon: expectedRibbon, discount: expectedDiscount });
+            // prevPrice = what customer currently pays (discounted or regular)
+            const currentEffective = Math.round((wixProduct.priceData?.discountedPrice ?? wixProduct.priceData?.price ?? 0) * 100) / 100;
+            priceReport.push({ sku, name: productName, prevPrice: currentEffective, newPrice: reportNewPrice, priceDown: reportNewPrice < currentEffective, failed: false, isPromo: !!promo });
+          } else {
+            logger.debug(CTX, `  = SKU: ${sku} | Precio/promo sin cambio, omitiendo`);
           }
         }
       }
@@ -275,7 +334,7 @@ export class PriceInventorySyncTask extends BaseTask {
               const item = priceItems[idx++];
               inFlight++;
               windowTimestamps.push(Date.now());
-              updateProductPrice(item.productId, item.price)
+              updateProductPrice(item.productId, item.price, { ribbon: item.ribbon, discount: item.discount })
                 .then(() => { priceOk++; })
                 .catch((err: unknown) => {
                   priceFail++;
@@ -308,7 +367,7 @@ export class PriceInventorySyncTask extends BaseTask {
 // ─── Email report helper ─────────────────────────────────────────────────────
 
 interface InvReportRow  { sku: string; name: string; prevStock: number; newStock: number; blocked: boolean; failed: boolean; }
-interface PriceReportRow { sku: string; name: string; prevPrice: number; newPrice: number; priceDown: boolean; failed: boolean; }
+interface PriceReportRow { sku: string; name: string; prevPrice: number; newPrice: number; priceDown: boolean; failed: boolean; isPromo: boolean; }
 
 async function sendSyncReport(opts: {
   invReport: InvReportRow[];
@@ -380,7 +439,9 @@ async function sendSyncReport(opts: {
   };
 
   const buildPriceRow = (r: PriceReportRow) => {
-    const badge = r.failed ? '<span class="badge badge-fail">ERROR</span>' : '';
+    const badge = r.failed
+      ? '<span class="badge badge-fail">ERROR</span>'
+      : r.isPromo ? '<span class="badge badge-blocked">🏷 PROMO</span>' : '';
     const priceChange = `<span class="num">${fmt(r.prevPrice)}</span><span class="arrow">→</span><span class="num ${r.priceDown ? 'down' : 'up'}">${fmt(r.newPrice)}</span>`;
     return `<tr><td class="num">${r.sku}</td><td>${r.name}</td><td>${priceChange}</td><td>${badge}</td></tr>`;
   };
