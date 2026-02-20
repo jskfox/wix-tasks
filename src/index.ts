@@ -1,6 +1,6 @@
 import { config } from './config';
 import { logger } from './utils/logger';
-import { registerTask, startAll, stopAll } from './scheduler';
+import { registerTask, startAll, stopAll, pruneOldData } from './scheduler';
 import { closePool } from './services/database';
 import { closeMssqlPool } from './services/mssql';
 import { closeSettingsDb } from './services/settings-db';
@@ -33,6 +33,9 @@ async function main(): Promise<void> {
   registerTask(new OdooInventorySyncTask('stock-only')); // Every hour at :15
   registerTask(new OdooPriceSyncTask());                 // Every hour at :45
   registerTask(new ErpPostgresSyncTask());              // Every 30 min 6am-9pm
+
+  // Prune history and logs older than 14 days
+  pruneOldData(14);
 
   // Start the scheduler
   startAll();

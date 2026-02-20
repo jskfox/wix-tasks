@@ -100,7 +100,7 @@ function getDb(): Database.Database {
   // Enable WAL mode for better concurrent read performance
   db.pragma('journal_mode = WAL');
 
-  // Create table if not exists
+  // Create tables if not exist
   db.exec(`
     CREATE TABLE IF NOT EXISTS settings (
       key         TEXT PRIMARY KEY,
@@ -108,7 +108,30 @@ function getDb(): Database.Database {
       category    TEXT NOT NULL DEFAULT 'general',
       description TEXT NOT NULL DEFAULT '',
       updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
-    )
+    );
+
+    CREATE TABLE IF NOT EXISTS task_history (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_name   TEXT NOT NULL,
+      started_at  TEXT NOT NULL,
+      finished_at TEXT NOT NULL,
+      duration_ms INTEGER NOT NULL,
+      status      TEXT NOT NULL,
+      error       TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_task_history_task ON task_history(task_name);
+    CREATE INDEX IF NOT EXISTS idx_task_history_started ON task_history(started_at);
+
+    CREATE TABLE IF NOT EXISTS task_logs (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp  TEXT NOT NULL,
+      level      TEXT NOT NULL,
+      context    TEXT NOT NULL,
+      message    TEXT NOT NULL,
+      data       TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_task_logs_timestamp ON task_logs(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_task_logs_context ON task_logs(context);
   `);
 
   // Seed defaults (only inserts if key doesn't exist)
@@ -214,6 +237,122 @@ export function closeSettingsDb(): void {
     db = null;
     console.log(`${TAG} Settings DB closed`);
   }
+}
+
+// ── Task history persistence ──────────────────────────────────────────────────
+
+export interface PersistedTaskRun {
+  id: number;
+  task_name: string;
+  started_at: string;
+  finished_at: string;
+  duration_ms: number;
+  status: 'success' | 'error';
+  error?: string;
+}
+
+/** Insert a task run entry into persistent storage */
+export function insertTaskRun(taskName: string, run: {
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  status: 'success' | 'error';
+  error?: string;
+}): void {
+  getDb().prepare(`
+    INSERT INTO task_history (task_name, started_at, finished_at, duration_ms, status, error)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(taskName, run.startedAt, run.finishedAt, run.durationMs, run.status, run.error ?? null);
+}
+
+/** Load recent history for a task (most recent first, up to limit) */
+export function loadTaskHistory(taskName: string, limit = 50): PersistedTaskRun[] {
+  return getDb().prepare(`
+    SELECT * FROM task_history
+    WHERE task_name = ?
+    ORDER BY started_at DESC
+    LIMIT ?
+  `).all(taskName, limit) as PersistedTaskRun[];
+}
+
+/** Delete task history entries older than retentionDays */
+export function pruneTaskHistory(retentionDays = 14): number {
+  const result = getDb().prepare(`
+    DELETE FROM task_history
+    WHERE started_at < datetime('now', '-' || ? || ' days')
+  `).run(retentionDays);
+  return result.changes;
+}
+
+// ── Log persistence ───────────────────────────────────────────────────────────
+
+export interface PersistedLogEntry {
+  id: number;
+  timestamp: string;
+  level: string;
+  context: string;
+  message: string;
+  data?: string;
+}
+
+/** Insert a log entry into persistent storage */
+export function insertLog(entry: {
+  timestamp: string;
+  level: string;
+  context: string;
+  message: string;
+  data?: unknown;
+}): void {
+  getDb().prepare(`
+    INSERT INTO task_logs (timestamp, level, context, message, data)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    entry.timestamp,
+    entry.level,
+    entry.context,
+    entry.message,
+    entry.data !== undefined ? JSON.stringify(entry.data) : null,
+  );
+}
+
+/** Load recent logs with optional filters */
+export function loadLogs(opts?: {
+  level?: string;
+  context?: string;
+  limit?: number;
+}): PersistedLogEntry[] {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (opts?.level) {
+    const levelOrder: Record<string, number> = { debug: 0, info: 1, warn: 2, error: 3 };
+    const minLevel = levelOrder[opts.level] ?? 0;
+    const validLevels = Object.entries(levelOrder)
+      .filter(([, v]) => v >= minLevel)
+      .map(([k]) => `'${k}'`);
+    conditions.push(`level IN (${validLevels.join(',')})`);
+  }
+  if (opts?.context) {
+    conditions.push('context LIKE ?');
+    params.push(`%${opts.context}%`);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const limit = opts?.limit ?? 500;
+  params.push(limit);
+
+  return getDb().prepare(`
+    SELECT * FROM task_logs ${where} ORDER BY timestamp DESC LIMIT ?
+  `).all(...params) as PersistedLogEntry[];
+}
+
+/** Delete log entries older than retentionDays */
+export function pruneTaskLogs(retentionDays = 14): number {
+  const result = getDb().prepare(`
+    DELETE FROM task_logs
+    WHERE timestamp < datetime('now', '-' || ? || ' days')
+  `).run(retentionDays);
+  return result.changes;
 }
 
 // ── Helper: get email recipients for a task (with fallback) ──────────────────

@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { Cron } from 'croner';
 import { logger } from './utils/logger';
 import { BaseTask } from './tasks/base-task';
-import { getSetting, updateSetting } from './services/settings-db';
+import { getSetting, updateSetting, insertTaskRun, loadTaskHistory, pruneTaskHistory, pruneTaskLogs } from './services/settings-db';
 
 const CTX = 'Scheduler';
 
@@ -110,6 +110,12 @@ function pushHistory(state: TaskState, run: TaskRunEntry): void {
   state.lastRun = run;
   state.history.unshift(run);
   if (state.history.length > MAX_HISTORY) state.history.length = MAX_HISTORY;
+  // Persist to SQLite
+  try {
+    insertTaskRun(state.name, run);
+  } catch (err) {
+    logger.warn(CTX, `Failed to persist task run for ${state.name}: ${(err as Error).message}`);
+  }
 }
 
 /** Compute next scheduled execution time for a cron expression in a given timezone */
@@ -135,28 +141,54 @@ export function registerTask(task: BaseTask): void {
   // Load persisted enabled state from SQLite (default: true)
   const persistedEnabled = loadTaskEnabled(task.name);
 
+  // Load persisted cron expression (if user changed it via UI)
+  const persistedCron = getSetting(`task.${task.name}.cron`, task.cronExpression);
+
+  // Load persisted history from SQLite
+  const persistedHistory = loadTaskHistory(task.name, MAX_HISTORY);
+  const history: TaskRunEntry[] = persistedHistory.map(r => ({
+    startedAt: r.started_at,
+    finishedAt: r.finished_at,
+    durationMs: r.duration_ms,
+    status: r.status,
+    error: r.error ?? undefined,
+  }));
+
   const state: TaskState = {
     name: task.name,
     description: task.description,
-    cronExpression: task.cronExpression,
+    cronExpression: persistedCron,
     timezone: task.timezone,
     enabled: persistedEnabled,
     running: false,
-    lastRun: null,
-    history: [],
-    nextRun: computeNextRun(task.cronExpression, task.timezone),
+    lastRun: history[0] ?? null,
+    history,
+    nextRun: computeNextRun(persistedCron, task.timezone),
   };
 
   const entry: RegisteredTask = { task, job: null as unknown as cron.ScheduledTask, state };
 
   entry.job = cron.schedule(
-    task.cronExpression,
+    persistedCron,
     async () => { await executeTask(entry); },
     { timezone: task.timezone, scheduled: false },
   );
 
   registeredTasks.set(task.name, entry);
   logger.info(CTX, `Registered task: "${task.name}" [${task.cronExpression}] tz=${task.timezone}`);
+}
+
+/** Prune old history and logs (call once at startup) */
+export function pruneOldData(retentionDays = 14): void {
+  try {
+    const h = pruneTaskHistory(retentionDays);
+    const l = pruneTaskLogs(retentionDays);
+    if (h > 0 || l > 0) {
+      logger.info(CTX, `Pruned old data: ${h} history entries, ${l} log entries (>${retentionDays} days)`);
+    }
+  } catch (err) {
+    logger.warn(CTX, `Failed to prune old data: ${(err as Error).message}`);
+  }
 }
 
 export function startAll(): void {
@@ -219,6 +251,9 @@ export function updateCron(name: string, newCron: string): void {
     async () => { await executeTask(entry); },
     { timezone: entry.task.timezone, scheduled: true },
   );
+
+  // Persist custom cron expression
+  updateSetting(`task.${name}.cron`, newCron, 'tasks', `Cron expression for ${name}`);
 
   logger.info(CTX, `Updated cron for "${name}": ${newCron}`);
 }

@@ -65,6 +65,15 @@ class Logger {
     logBuffer.unshift({ timestamp: ts, level, context, message, data });
     if (logBuffer.length > MAX_LOG_BUFFER) logBuffer.length = MAX_LOG_BUFFER;
 
+    // Persist to SQLite (lazy import to avoid circular dependency at module load time)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { insertLog } = require('../services/settings-db') as typeof import('../services/settings-db');
+      insertLog({ timestamp: ts, level, context, message, data });
+    } catch {
+      // Silently ignore — DB may not be ready yet during bootstrap
+    }
+
     if (level === 'error') {
       console.error(line);
     } else if (level === 'warn') {
