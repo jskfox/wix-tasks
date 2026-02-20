@@ -114,6 +114,7 @@ export interface WixProduct {
   name?: string;
   sku?: string;
   inventoryItemId?: string;
+  priceData?: { price?: number; discountedPrice?: number };
   variants?: Array<{
     id: string;
     sku?: string;

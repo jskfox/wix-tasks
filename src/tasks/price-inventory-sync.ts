@@ -229,7 +229,13 @@ export class PriceInventorySyncTask extends BaseTask {
         }
 
         if (wixProduct.id && stockInfo.precioFinal > 0) {
-          priceItems.push({ productId: wixProduct.id, price: stockInfo.precioFinal, sku });
+          const currentPrice = Math.round((wixProduct.priceData?.price ?? 0) * 100) / 100;
+          const newPrice = stockInfo.precioFinal; // already rounded to 2 decimals
+          if (currentPrice !== newPrice) {
+            priceItems.push({ productId: wixProduct.id, price: newPrice, sku });
+          } else {
+            logger.debug(CTX, `  = SKU: ${sku} | Precio sin cambio ($${newPrice}), omitiendo`);
+          }
         }
       }
 
