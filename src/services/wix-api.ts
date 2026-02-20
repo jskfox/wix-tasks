@@ -207,12 +207,12 @@ export async function updateProductPrice(
   price: number,
   opts?: {
     ribbon?: string;
-    discount?: { type: 'PERCENT' | 'NONE'; value: number };
+    discount?: { type: 'PERCENT' | 'AMOUNT' | 'NONE'; value: number };
   },
 ): Promise<void> {
   const product: Record<string, unknown> = { priceData: { price } };
-  if (opts?.ribbon !== undefined) product.ribbon = opts.ribbon;
-  if (opts?.discount)            product.discount = opts.discount;
+  if (opts?.ribbon   !== undefined) product.ribbon   = opts.ribbon;
+  if (opts?.discount !== undefined) product.discount = opts.discount;
   await wixFetch({
     method: 'PATCH',
     path: `/stores/v1/products/${productId}`,

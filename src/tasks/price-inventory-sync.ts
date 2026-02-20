@@ -206,7 +206,7 @@ export class PriceInventorySyncTask extends BaseTask {
         price: number;  // base price sent to Wix (precio_regular for promo, precioFinal for regular)
         sku: string;
         ribbon: string;
-        discount: { type: 'PERCENT' | 'NONE'; value: number };
+        discount: { type: 'PERCENT' | 'AMOUNT' | 'NONE'; value: number };
       }> = [];
 
       // ── Report data ───────────────────────────────────────────────────────
@@ -246,13 +246,14 @@ export class PriceInventorySyncTask extends BaseTask {
           // Determine expected Wix state
           let expectedBasePrice: number;
           let expectedRibbon: string;
-          let expectedDiscount: { type: 'PERCENT' | 'NONE'; value: number };
+          let expectedDiscount: { type: 'PERCENT' | 'AMOUNT' | 'NONE'; value: number };
           let reportNewPrice: number; // effective price the customer pays
 
           if (promo) {
             expectedBasePrice  = promo.precioRegular;
             expectedRibbon     = 'PROMO';
-            expectedDiscount   = { type: 'PERCENT', value: promo.descuento };
+            // Use AMOUNT discount so Wix shows exactly precio_promo (not a rounded %)
+            expectedDiscount   = { type: 'AMOUNT', value: Math.round((promo.precioRegular - promo.precioPromo) * 100) / 100 };
             reportNewPrice     = promo.precioPromo;
           } else {
             if (stockInfo.precioFinal <= 0) continue;
@@ -278,7 +279,8 @@ export class PriceInventorySyncTask extends BaseTask {
             priceItems.push({ productId: wixProduct.id, price: expectedBasePrice, sku, ribbon: expectedRibbon, discount: expectedDiscount });
             // prevPrice = what customer currently pays (discounted or regular)
             const currentEffective = Math.round((wixProduct.priceData?.discountedPrice ?? wixProduct.priceData?.price ?? 0) * 100) / 100;
-            priceReport.push({ sku, name: productName, prevPrice: currentEffective, newPrice: reportNewPrice, priceDown: reportNewPrice < currentEffective, failed: false, isPromo: !!promo });
+            const wasPromo = currentRibbon === 'PROMO';
+            priceReport.push({ sku, name: productName, prevPrice: currentEffective, newPrice: reportNewPrice, priceDown: reportNewPrice < currentEffective, failed: false, isPromo: !!promo, wasPromo });
           } else {
             logger.debug(CTX, `  = SKU: ${sku} | Precio/promo sin cambio, omitiendo`);
           }
@@ -367,7 +369,7 @@ export class PriceInventorySyncTask extends BaseTask {
 // ─── Email report helper ─────────────────────────────────────────────────────
 
 interface InvReportRow  { sku: string; name: string; prevStock: number; newStock: number; blocked: boolean; failed: boolean; }
-interface PriceReportRow { sku: string; name: string; prevPrice: number; newPrice: number; priceDown: boolean; failed: boolean; isPromo: boolean; }
+interface PriceReportRow { sku: string; name: string; prevPrice: number; newPrice: number; priceDown: boolean; failed: boolean; isPromo: boolean; wasPromo: boolean; }
 
 async function sendSyncReport(opts: {
   invReport: InvReportRow[];
@@ -407,6 +409,11 @@ async function sendSyncReport(opts: {
     .sec-count.stock{background:#dbeafe;color:#1e40af}
     .sec-count.price{background:#f3e8ff;color:#6b21a8}
     .sec-count.fail{background:#fee2e2;color:#991b1b}
+    .sec-count.promo-new{background:#d1fae5;color:#065f46}
+    .sec-count.promo-del{background:#fee2e2;color:#991b1b}
+    .sec-count.promo-upd{background:#e0f2fe;color:#0369a1}
+    .badge-promo-new{background:#d1fae5;color:#065f46}
+    .badge-promo-del{background:#fee2e2;color:#991b1b}
     .chevron{font-size:12px;color:#9ca3af;transition:transform .2s}
     details[open] .chevron{transform:rotate(180deg)}
     table{width:100%;border-collapse:collapse;font-size:13px}
@@ -427,10 +434,15 @@ async function sendSyncReport(opts: {
   `;
 
   // ── Split inventory into blocked vs stock-changed ──
-  const blockedRows  = invReport.filter(r => r.blocked);
-  const stockRows    = invReport.filter(r => !r.blocked);
-  const priceDownRows = priceReport.filter(r => r.priceDown);
-  const priceUpRows   = priceReport.filter(r => !r.priceDown);
+  const blockedRows    = invReport.filter(r => r.blocked);
+  const stockRows      = invReport.filter(r => !r.blocked);
+
+  // ── Split price report into promo-aware sections ──
+  const promoNewRows = priceReport.filter(r =>  r.isPromo && !r.wasPromo);   // just added to promo
+  const promoUpdRows = priceReport.filter(r =>  r.isPromo &&  r.wasPromo);   // was promo, price/discount changed
+  const promoDelRows = priceReport.filter(r => !r.isPromo &&  r.wasPromo);   // removed from promo
+  const priceDownRows = priceReport.filter(r => !r.isPromo && !r.wasPromo && r.priceDown);
+  const priceUpRows   = priceReport.filter(r => !r.isPromo && !r.wasPromo && !r.priceDown);
 
   const buildInvRow = (r: InvReportRow) => {
     const badge = r.failed ? '<span class="badge badge-fail">ERROR</span>' : '';
@@ -439,9 +451,11 @@ async function sendSyncReport(opts: {
   };
 
   const buildPriceRow = (r: PriceReportRow) => {
-    const badge = r.failed
-      ? '<span class="badge badge-fail">ERROR</span>'
-      : r.isPromo ? '<span class="badge badge-blocked">🏷 PROMO</span>' : '';
+    let badge = '';
+    if (r.failed)       badge = '<span class="badge badge-fail">ERROR</span>';
+    else if (r.isPromo && !r.wasPromo)  badge = '<span class="badge badge-promo-new">🆕 PROMO</span>';
+    else if (r.isPromo &&  r.wasPromo)  badge = '<span class="badge badge-blocked">🏷 PROMO</span>';
+    else if (!r.isPromo && r.wasPromo)  badge = '<span class="badge badge-promo-del">❌ Sin promo</span>';
     const priceChange = `<span class="num">${fmt(r.prevPrice)}</span><span class="arrow">→</span><span class="num ${r.priceDown ? 'down' : 'up'}">${fmt(r.newPrice)}</span>`;
     return `<tr><td class="num">${r.sku}</td><td>${r.name}</td><td>${priceChange}</td><td>${badge}</td></tr>`;
   };
@@ -471,7 +485,16 @@ async function sendSyncReport(opts: {
   const secStock = section('sec-stock', '📦', 'Cambios de Stock', 'stock', stockRows.length, true,
     tableOrEmpty(stockRows.map(buildInvRow).join(''), invHeaders, 'Sin cambios de stock.'));
 
-  const secPriceDown = section('sec-price-down', '↓', 'Precios que Bajaron', 'blocked', priceDownRows.length, true,
+  const secPromoNew = section('sec-promo-new', '🆕', 'Nuevas Promociones', 'promo-new', promoNewRows.length, true,
+    tableOrEmpty(promoNewRows.map(buildPriceRow).join(''), priceHeaders, 'Sin nuevas promociones.'));
+
+  const secPromoUpd = section('sec-promo-upd', '🏷', 'Promociones Actualizadas', 'promo-upd', promoUpdRows.length, false,
+    tableOrEmpty(promoUpdRows.map(buildPriceRow).join(''), priceHeaders, 'Sin cambios en promociones activas.'));
+
+  const secPromoDel = section('sec-promo-del', '❌', 'Promociones Eliminadas', 'promo-del', promoDelRows.length, true,
+    tableOrEmpty(promoDelRows.map(buildPriceRow).join(''), priceHeaders, 'Ninguna promoción eliminada.'));
+
+  const secPriceDown = section('sec-price-down', '↓', 'Precios que Bajaron', 'blocked', priceDownRows.length, false,
     tableOrEmpty(priceDownRows.map(buildPriceRow).join(''), priceHeaders, 'Ningún precio bajó.'));
 
   const secPriceUp = section('sec-price-up', '↑', 'Precios que Subieron', 'price', priceUpRows.length, false,
@@ -492,6 +515,9 @@ async function sendSyncReport(opts: {
 
     ${secBlocked}
     ${secStock}
+    ${secPromoNew}
+    ${secPromoUpd}
+    ${secPromoDel}
     ${secPriceDown}
     ${secPriceUp}
 
