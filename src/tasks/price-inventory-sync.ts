@@ -6,6 +6,9 @@ import {
   queryAllWixProducts,
   updateInventoryVariantsConcurrent,
   updateProductPrice,
+  findCollectionByName,
+  addProductsToCollection,
+  removeProductsFromCollection,
   WixProduct,
 } from '../services/wix-api';
 import { getSetting } from '../services/settings-db';
@@ -67,9 +70,17 @@ export class PriceInventorySyncTask extends BaseTask {
     logger.info(CTX, `${modeLabel} Starting price+inventory sync (stock branches=${branchPrefix}*, price sucursal=${sucursalWix}, threshold=${minThreshold})...`);
 
     // ══════════════════════════════════════════════════════════════════════════
-    // STEP 1: Get ALL products from Wix (with SKU and inventoryItemId)
+    // STEP 1: Get ALL products from Wix + resolve Descuento10 collection ID
     // ══════════════════════════════════════════════════════════════════════════
-    const wixProducts = await queryAllWixProducts();
+    const [wixProducts, descuento10Id] = await Promise.all([
+      queryAllWixProducts(),
+      findCollectionByName('Descuento10'),
+    ]);
+    if (descuento10Id) {
+      logger.info(CTX, `Colección Descuento10 encontrada: ${descuento10Id}`);
+    } else {
+      logger.warn(CTX, 'Colección "Descuento10" no encontrada en Wix — se omitirá sincronización de colección');
+    }
 
     if (wixProducts.length === 0) {
       logger.info(CTX, 'No products found in Wix store, nothing to sync');
@@ -287,9 +298,25 @@ export class PriceInventorySyncTask extends BaseTask {
         }
       }
 
+      // ── STEP 4c: Collection membership for Descuento10 ──────────────────
+      const collectionToAdd:    string[] = [];  // product IDs to add to Descuento10
+      const collectionToRemove: string[] = [];  // product IDs to remove from Descuento10
+
+      if (descuento10Id) {
+        for (const [sku, stockInfo] of stockMap) {
+          const wixProduct = wixProductMap.get(sku);
+          if (!wixProduct?.id) continue;
+          const inCollection = (wixProduct.collectionIds ?? []).includes(descuento10Id);
+          const shouldBeIn   = !!stockInfo.promo;
+          if (shouldBeIn && !inCollection) collectionToAdd.push(wixProduct.id);
+          if (!shouldBeIn && inCollection)  collectionToRemove.push(wixProduct.id);
+        }
+        logger.info(CTX, `Descuento10: +${collectionToAdd.length} agregar, -${collectionToRemove.length} quitar`);
+      }
+
       // Early exit if nothing changed
-      if (inventoryItems.length === 0 && priceItems.length === 0) {
-        logger.info(CTX, `${modeLabel} No real changes detected (stock and prices match Wix) — nothing to update`);
+      if (inventoryItems.length === 0 && priceItems.length === 0 && collectionToAdd.length === 0 && collectionToRemove.length === 0) {
+        logger.info(CTX, `${modeLabel} No real changes detected (stock, prices and collections match Wix) — nothing to update`);
         return;
       }
 
@@ -355,11 +382,31 @@ export class PriceInventorySyncTask extends BaseTask {
         });
       })();
 
-      logger.info(CTX, `${modeLabel} Sync complete — Inventory: ${invOk} ok, ${invFail} failed (${blocked} blocked at 0) | Prices: ${priceOk} ok, ${priceFail} failed | Skipped: ${skipped}`);
+      // ── STEP 4c: Apply collection updates ────────────────────────────────
+      let colAddOk = 0; let colRemOk = 0; let colFail = 0;
+      if (descuento10Id) {
+        try {
+          if (collectionToAdd.length > 0) {
+            await addProductsToCollection(descuento10Id, collectionToAdd);
+            colAddOk = collectionToAdd.length;
+            logger.info(CTX, `Descuento10: agregados ${colAddOk} producto(s)`);
+          }
+          if (collectionToRemove.length > 0) {
+            await removeProductsFromCollection(descuento10Id, collectionToRemove);
+            colRemOk = collectionToRemove.length;
+            logger.info(CTX, `Descuento10: removidos ${colRemOk} producto(s)`);
+          }
+        } catch (err) {
+          colFail++;
+          logger.error(CTX, `Error actualizando colección Descuento10: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
+      logger.info(CTX, `${modeLabel} Sync complete — Inventory: ${invOk} ok, ${invFail} failed (${blocked} blocked at 0) | Prices: ${priceOk} ok, ${priceFail} failed | Descuento10: +${colAddOk} -${colRemOk} ${colFail > 0 ? '(error)' : ''} | Skipped: ${skipped}`);
 
       // ── STEP 5: Send email report ─────────────────────────────────────────
       if (!this.testLimit) {
-        await sendSyncReport({ invReport, priceReport, invOk, invFail, priceOk, priceFail, skipped, blocked, modeLabel, minThreshold });
+        await sendSyncReport({ invReport, priceReport, invOk, invFail, priceOk, priceFail, skipped, blocked, colAddOk, colRemOk, colFail, modeLabel, minThreshold });
       }
     }
 
@@ -377,6 +424,7 @@ async function sendSyncReport(opts: {
   invOk: number; invFail: number;
   priceOk: number; priceFail: number;
   skipped: number; blocked: number;
+  colAddOk: number; colRemOk: number; colFail: number;
   modeLabel: string; minThreshold: number;
 }): Promise<void> {
   const recipients = getEmailsForTask('erpPostgresSync');
@@ -385,7 +433,7 @@ async function sendSyncReport(opts: {
     return;
   }
 
-  const { invReport, priceReport, invOk, invFail, priceOk, priceFail, skipped, blocked, modeLabel, minThreshold } = opts;
+  const { invReport, priceReport, invOk, invFail, priceOk, priceFail, skipped, blocked, colAddOk, colRemOk, colFail, modeLabel, minThreshold } = opts;
   const now = new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City', hour12: false });
   const fmt = (n: number) => `$${n.toFixed(2)}`;
 
@@ -509,6 +557,7 @@ async function sendSyncReport(opts: {
       <div class="stat ok"><div class="stat-val">${invOk}</div><div class="stat-lbl">Inventario OK</div></div>
       <div class="stat warn"><div class="stat-val">${blocked}</div><div class="stat-lbl">Bloqueados (stock=0)</div></div>
       <div class="stat ok"><div class="stat-val">${priceOk}</div><div class="stat-lbl">Precios actualizados</div></div>
+      <div class="stat ${colFail > 0 ? 'danger' : 'ok'}"><div class="stat-val">+${colAddOk} / -${colRemOk}</div><div class="stat-lbl">Descuento10</div></div>
       <div class="stat ${totalFails > 0 ? 'danger' : 'ok'}"><div class="stat-val">${totalFails}</div><div class="stat-lbl">Errores</div></div>
       <div class="stat"><div class="stat-val">${skipped}</div><div class="stat-lbl">Omitidos</div></div>
     </div>

@@ -114,6 +114,7 @@ export interface WixProduct {
   name?: string;
   sku?: string;
   inventoryItemId?: string;
+  collectionIds?: string[];
   priceData?: { price?: number; discountedPrice?: number };
   ribbon?: string;
   discount?: { type: string; value: number };
@@ -198,6 +199,49 @@ export async function queryProductsBySku(skus: string[]): Promise<WixProduct[]> 
     allProducts.push(...(result.products || []));
   }
   return allProducts;
+}
+
+// ─── Collections ────────────────────────────────────────────────────────────────
+
+interface CollectionQueryResponse {
+  collections: Array<{ id: string; name: string }>;
+}
+
+/** Find a collection ID by its exact name. Returns null if not found. */
+export async function findCollectionByName(name: string): Promise<string | null> {
+  const result = await wixFetch<CollectionQueryResponse>({
+    method: 'POST',
+    path: '/stores/v1/collections/query',
+    body: {
+      query: {
+        filter: JSON.stringify({ name: { $eq: name } }),
+        paging: { limit: 1 },
+      },
+    },
+  });
+  return result.collections?.[0]?.id ?? null;
+}
+
+/** Add product IDs to a collection in batches of 100. */
+export async function addProductsToCollection(collectionId: string, productIds: string[]): Promise<void> {
+  for (let i = 0; i < productIds.length; i += 100) {
+    await wixFetch({
+      method: 'POST',
+      path: `/stores/v1/collections/${collectionId}/productIds`,
+      body: { productIds: productIds.slice(i, i + 100) },
+    });
+  }
+}
+
+/** Remove product IDs from a collection in batches of 100. */
+export async function removeProductsFromCollection(collectionId: string, productIds: string[]): Promise<void> {
+  for (let i = 0; i < productIds.length; i += 100) {
+    await wixFetch({
+      method: 'POST',
+      path: `/stores/v1/collections/${collectionId}/productIds/delete`,
+      body: { productIds: productIds.slice(i, i + 100) },
+    });
+  }
 }
 
 // ─── Update Product Variants (price) ────────────────────────────────────────────
