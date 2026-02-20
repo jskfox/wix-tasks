@@ -8,23 +8,17 @@ import {
   updateProductPrice,
   WixProduct,
 } from '../services/wix-api';
-import { getSetting, setSetting } from '../services/settings-db';
+import { getSetting } from '../services/settings-db';
 import { sendEmail } from '../services/email';
 
 const CTX = 'PriceInventorySync';
-const WATERMARK_KEY = 'wix.price_inventory_sync.last_processed_timestamp';
 
-interface StockSumRow {
+interface StockPriceRow {
   sku: string;
   total_stock: string;
-  last_updated: string;
-}
-
-interface PriceRow {
-  sku: string;
-  precio: string;
-  impuesto: string;
-  ieps: string;
+  precio: string | null;
+  impuesto: string | null;
+  ieps: string | null;
 }
 
 export class PriceInventorySyncTask extends BaseTask {
@@ -95,65 +89,42 @@ export class PriceInventorySyncTask extends BaseTask {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // STEP 2: Query PostgreSQL for stock + price data
+    // STEP 2: Query PostgreSQL for stock + price data (all Wix SKUs, no watermark)
     // ══════════════════════════════════════════════════════════════════════════
-    const defaultWatermark = '1970-01-01T00:00:00.000Z';
-    const lastProcessed = getSetting(WATERMARK_KEY, defaultWatermark);
-
-    logger.info(CTX, `Watermark: processing changes since ${lastProcessed}`);
-
+    // No watermark — compare actual values against Wix on every run.
+    // This ensures manual changes in Wix or PostgreSQL are always reconciled.
     const skuPlaceholders = wixSkus.map((_, i) => `$${i + 3}`).join(', ');
-
-    // Stock query: sum across all branches matching branchPrefix, detect changes via watermark
-    const stockResult = await query<StockSumRow>(
+    const stockPriceResult = await query<StockPriceRow>(
       `SELECT
-         sku,
-         SUM(existencia::numeric) AS total_stock,
-         MAX(precio_actualizado) AS last_updated
-       FROM maestro_precios_sucursal
-       WHERE precio_actualizado > $1
-         AND sucursal::text LIKE $2
-         AND sku IN (${skuPlaceholders})
-       GROUP BY sku
-       ORDER BY MAX(precio_actualizado) DESC`,
-      [lastProcessed, `${branchPrefix}%`, ...wixSkus],
+         s.sku,
+         SUM(s.existencia::numeric)  AS total_stock,
+         MAX(p.precio)               AS precio,
+         MAX(p.impuesto)             AS impuesto,
+         MAX(p.ieps)                 AS ieps
+       FROM maestro_precios_sucursal s
+       LEFT JOIN maestro_precios_sucursal p
+         ON p.sku = s.sku AND p.sucursal = $2
+       WHERE s.sucursal::text LIKE $1
+         AND s.sku IN (${skuPlaceholders})
+       GROUP BY s.sku`,
+      [branchPrefix + '%', sucursalWix, ...wixSkus],
     );
 
-    const changedRows = stockResult.rows;
+    const allRows = stockPriceResult.rows;
 
-    if (changedRows.length === 0) {
-      logger.info(CTX, `No inventory changes detected for Wix SKUs since ${lastProcessed}`);
+    if (allRows.length === 0) {
+      logger.info(CTX, 'No SKUs found in PostgreSQL matching Wix catalog, nothing to sync');
       return;
     }
 
-    logger.info(CTX, `Found ${changedRows.length} SKU(s) with changes (out of ${wixSkus.length} Wix SKUs)`);
+    logger.info(CTX, `Fetched ${allRows.length} SKU(s) from PostgreSQL (out of ${wixSkus.length} Wix SKUs)`);
 
     // Apply test limit if set
-    let rowsToProcess = changedRows;
-    if (this.testLimit && changedRows.length > this.testLimit) {
-      rowsToProcess = changedRows.slice(0, this.testLimit);
-      logger.info(CTX, `${modeLabel} Limiting to ${this.testLimit} SKUs for testing (${changedRows.length - this.testLimit} skipped)`);
+    let rowsToProcess = allRows;
+    if (this.testLimit && allRows.length > this.testLimit) {
+      rowsToProcess = allRows.slice(0, this.testLimit);
+      logger.info(CTX, `${modeLabel} Limiting to ${this.testLimit} SKUs for testing (${allRows.length - this.testLimit} skipped)`);
     }
-
-    // Price query: exact sucursalWix, one row per SKU with precio+impuesto+ieps
-    const changedSkus = rowsToProcess.map(r => r.sku);
-    const priceSkuPlaceholders = changedSkus.map((_, i) => `$${i + 2}`).join(', ');
-    const priceResult = await query<PriceRow>(
-      `SELECT sku, precio, impuesto, ieps
-       FROM maestro_precios_sucursal
-       WHERE sucursal = $1
-         AND sku IN (${priceSkuPlaceholders})`,
-      [sucursalWix, ...changedSkus],
-    );
-    const priceMap = new Map<string, { precio: number; impuesto: number; ieps: number }>();
-    for (const r of priceResult.rows) {
-      priceMap.set(r.sku, {
-        precio: parseFloat(r.precio) || 0,
-        impuesto: parseFloat(r.impuesto) || 0,
-        ieps: parseFloat(r.ieps) || 0,
-      });
-    }
-    logger.info(CTX, `Fetched prices for ${priceMap.size} SKUs from sucursal ${sucursalWix}`);
 
     // ══════════════════════════════════════════════════════════════════════════
     // STEP 3: Build stock + price map
@@ -164,12 +135,14 @@ export class PriceInventorySyncTask extends BaseTask {
       const totalStock = parseFloat(row.total_stock) || 0;
       const effectiveStock = totalStock < minThreshold ? 0 : Math.floor(totalStock);
 
-      const p = priceMap.get(row.sku);
+      const precio   = parseFloat(row.precio   ?? '0') || 0;
+      const impuesto = parseFloat(row.impuesto ?? '0') || 0;
+      const ieps     = parseFloat(row.ieps     ?? '0') || 0;
       let precioFinal = 0;
-      if (p && p.precio > 0) {
-        const iepsMonto = p.precio * (p.ieps / 100);
-        const subtotal  = p.precio + iepsMonto;
-        const ivaMonto  = subtotal * (p.impuesto / 100);
+      if (precio > 0) {
+        const iepsMonto = precio * (ieps / 100);
+        const subtotal  = precio + iepsMonto;
+        const ivaMonto  = subtotal * (impuesto / 100);
         precioFinal = Math.round((subtotal + ivaMonto) * 100) / 100;
       }
 
@@ -226,13 +199,17 @@ export class PriceInventorySyncTask extends BaseTask {
 
         if (wixProduct.inventoryItemId) {
           if (stockInfo.effectiveStock === 0) blocked++;
-          inventoryItems.push({
-            inventoryItemId: wixProduct.inventoryItemId,
-            trackQuantity: true,
-            variants: [{ variantId: defaultVariantId, quantity: stockInfo.effectiveStock, inStock: stockInfo.effectiveStock > 0 }],
-            sku,
-          });
-          invReport.push({ sku, name: productName, prevStock, newStock: stockInfo.effectiveStock, blocked: stockInfo.effectiveStock === 0, failed: false });
+          if (stockInfo.effectiveStock !== prevStock) {
+            inventoryItems.push({
+              inventoryItemId: wixProduct.inventoryItemId,
+              trackQuantity: true,
+              variants: [{ variantId: defaultVariantId, quantity: stockInfo.effectiveStock, inStock: stockInfo.effectiveStock > 0 }],
+              sku,
+            });
+            invReport.push({ sku, name: productName, prevStock, newStock: stockInfo.effectiveStock, blocked: stockInfo.effectiveStock === 0, failed: false });
+          } else {
+            logger.debug(CTX, `  = SKU: ${sku} | Stock sin cambio (${prevStock}), omitiendo`);
+          }
         } else {
           logger.warn(CTX, `⚠ SKU ${sku} has no inventoryItemId, skipping inventory update`);
         }
@@ -247,6 +224,12 @@ export class PriceInventorySyncTask extends BaseTask {
             logger.debug(CTX, `  = SKU: ${sku} | Precio sin cambio ($${newPrice}), omitiendo`);
           }
         }
+      }
+
+      // Early exit if nothing changed
+      if (inventoryItems.length === 0 && priceItems.length === 0) {
+        logger.info(CTX, `${modeLabel} No real changes detected (stock and prices match Wix) — nothing to update`);
+        return;
       }
 
       // Inventory
@@ -319,19 +302,6 @@ export class PriceInventorySyncTask extends BaseTask {
       }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // STEP 6: Update watermark to latest processed timestamp
-    // ══════════════════════════════════════════════════════════════════════════
-    // Skip watermark update in test mode so we can re-run with more SKUs
-    if (this.testLimit) {
-      logger.info(CTX, `${modeLabel} Skipping watermark update (test mode)`);
-    } else if (changedRows.length > 0) {
-      // PostgreSQL returns timestamp - convert to ISO format for consistent storage
-      const rawTimestamp = changedRows[0].last_updated;
-      const latestTimestamp = new Date(rawTimestamp).toISOString();
-      setSetting(WATERMARK_KEY, latestTimestamp);
-      logger.info(CTX, `Watermark updated to: ${latestTimestamp}`);
-    }
   }
 }
 
