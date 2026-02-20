@@ -211,8 +211,6 @@ export class PriceInventorySyncTask extends BaseTask {
       const priceItems: Array<{ productId: string; price: number; sku: string }> = [];
 
       // ── Report data ───────────────────────────────────────────────────────
-      interface InvReportRow { sku: string; name: string; prevStock: number; newStock: number; blocked: boolean; failed: boolean; }
-      interface PriceReportRow { sku: string; name: string; prevPrice: number; newPrice: number; priceDown: boolean; failed: boolean; }
       const invReport: InvReportRow[] = [];
       const priceReport: PriceReportRow[] = [];
 
