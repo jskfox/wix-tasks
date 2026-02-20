@@ -4,7 +4,7 @@ import { logger } from '../utils/logger';
 import { query } from '../services/database';
 import {
   queryAllWixProducts,
-  updateInventoryVariants,
+  updateInventoryVariantsConcurrent,
   WixProduct,
 } from '../services/wix-api';
 import { getSetting, setSetting } from '../services/settings-db';
@@ -148,59 +148,58 @@ export class PriceInventorySyncTask extends BaseTask {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // STEP 4: Update inventory in Wix
+    // STEP 4: Update inventory in Wix (concurrent requests, capped at 10)
     // ══════════════════════════════════════════════════════════════════════════
-    let updated = 0;
-    let blocked = 0;
+    const defaultVariantId = '00000000-0000-0000-0000-000000000000';
     let skipped = 0;
-    let errors = 0;
+    let blocked = 0;
 
-    for (const [sku, stockInfo] of stockMap) {
-      const wixProduct = wixProductMap.get(sku);
-      if (!wixProduct) continue;
-
-      // Must have inventoryItemId to update inventory
-      if (!wixProduct.inventoryItemId) {
-        logger.warn(CTX, `⚠ SKU ${sku} has no inventoryItemId, skipping`);
-        skipped++;
-        continue;
-      }
-
-      try {
-        // Update inventory using the default variant ID for simple products
-        const defaultVariantId = '00000000-0000-0000-0000-000000000000';
-
-        if (dryRun) {
-          // DRY-RUN: only log what would happen
-          if (stockInfo.effectiveStock === 0) {
-            logger.info(CTX, `${modeLabel} Would block SKU ${sku} (total=${stockInfo.totalStock.toFixed(0)} < ${minThreshold})`);
-            blocked++;
-          } else {
-            logger.info(CTX, `${modeLabel} Would update SKU ${sku} → ${stockInfo.effectiveStock} units`);
-            updated++;
-          }
+    if (dryRun) {
+      let updated = 0;
+      for (const [sku, stockInfo] of stockMap) {
+        if (stockInfo.effectiveStock === 0) {
+          logger.info(CTX, `${modeLabel} Would block SKU ${sku} (total=${stockInfo.totalStock.toFixed(0)} < ${minThreshold})`);
+          blocked++;
         } else {
-          // LIVE: actually update Wix
-          await updateInventoryVariants(wixProduct.inventoryItemId, true, [
-            { variantId: defaultVariantId, quantity: stockInfo.effectiveStock, inStock: stockInfo.effectiveStock > 0 },
-          ]);
-
-          if (stockInfo.effectiveStock === 0) {
-            logger.info(CTX, `⛔ Blocked SKU ${sku} in Wix (total=${stockInfo.totalStock.toFixed(0)} < ${minThreshold})`);
-            blocked++;
-          } else {
-            logger.info(CTX, `✓ Updated SKU ${sku} → ${stockInfo.effectiveStock} units`);
-            updated++;
-          }
+          logger.info(CTX, `${modeLabel} Would update SKU ${sku} → ${stockInfo.effectiveStock} units`);
+          updated++;
         }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.error(CTX, `✖ Failed to update SKU ${sku}: ${msg}`);
-        errors++;
       }
-    }
+      logger.info(CTX, `${modeLabel} Sync complete: ${updated} would update, ${blocked} would block (stock<${minThreshold}), ${skipped} skipped`);
+    } else {
+      // Build the concurrent update payload
+      const updateItems: Array<{
+        inventoryItemId: string;
+        trackQuantity: boolean;
+        variants: Array<{ variantId: string; quantity: number; inStock: boolean }>;
+        sku: string;
+      }> = [];
 
-    logger.info(CTX, `${modeLabel} Sync complete: ${updated} updated, ${blocked} blocked (stock<${minThreshold}), ${skipped} skipped, ${errors} errors`);
+      for (const [sku, stockInfo] of stockMap) {
+        const wixProduct = wixProductMap.get(sku);
+        if (!wixProduct?.inventoryItemId) {
+          logger.warn(CTX, `⚠ SKU ${sku} has no inventoryItemId, skipping`);
+          skipped++;
+          continue;
+        }
+        if (stockInfo.effectiveStock === 0) blocked++;
+        updateItems.push({
+          inventoryItemId: wixProduct.inventoryItemId,
+          trackQuantity: true,
+          variants: [{ variantId: defaultVariantId, quantity: stockInfo.effectiveStock, inStock: stockInfo.effectiveStock > 0 }],
+          sku,
+        });
+      }
+
+      const ratePerMin = 180;
+      const estSecs = updateItems.length <= ratePerMin
+        ? '<1'
+        : `~${Math.ceil(updateItems.length / ratePerMin)} min`;
+      logger.info(CTX, `Sending ${updateItems.length} inventory updates (max ${ratePerMin}/min, est. ${estSecs}, ${blocked} blocked at 0)...`);
+      const { successes, failures } = await updateInventoryVariantsConcurrent(updateItems);
+
+      logger.info(CTX, `${modeLabel} Sync complete: ${successes} updated (${blocked} blocked at 0), ${failures} failures, ${skipped} skipped`);
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // STEP 5: Update watermark to latest processed timestamp
@@ -208,7 +207,7 @@ export class PriceInventorySyncTask extends BaseTask {
     // Skip watermark update in test mode so we can re-run with more SKUs
     if (this.testLimit) {
       logger.info(CTX, `${modeLabel} Skipping watermark update (test mode)`);
-    } else if (changedRows.length > 0 && (dryRun || (updated + blocked) > 0)) {
+    } else if (changedRows.length > 0) {
       // PostgreSQL returns timestamp - convert to ISO format for consistent storage
       const rawTimestamp = changedRows[0].last_updated;
       const latestTimestamp = new Date(rawTimestamp).toISOString();

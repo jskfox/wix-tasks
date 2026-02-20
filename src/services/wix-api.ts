@@ -229,3 +229,97 @@ export async function updateInventoryVariants(
     },
   });
 }
+
+/**
+ * Update inventory for multiple products using a sliding-window rate limiter.
+ *
+ * Wix REST API limit: 200 requests/minute per instance (official docs).
+ * We target 180 req/min (10% safety margin).
+ *
+ * The sliding window dynamically maximizes throughput:
+ *   - Few items  (≤180): all dispatched immediately in parallel → done in ~500ms
+ *   - Many items (>180): first 180 go at full speed, then auto-throttles to
+ *                        180/min sustaining maximum throughput without ban risk.
+ *
+ * Estimated time: max(latency, ceil(N/180) minutes)
+ *
+ * @returns counts of successes and failures
+ */
+export async function updateInventoryVariantsConcurrent(
+  items: Array<{
+    inventoryItemId: string;
+    trackQuantity: boolean;
+    variants: Array<{ variantId: string; quantity?: number; inStock?: boolean }>;
+  }>,
+  ratePerMinute = 180,
+  maxConcurrent = 20,
+): Promise<{ successes: number; failures: number }> {
+  if (items.length === 0) return { successes: 0, failures: 0 };
+
+  const windowMs = 60_000;
+  // Timestamps of requests dispatched within the current sliding window
+  const windowTimestamps: number[] = [];
+
+  let successes = 0;
+  let failures = 0;
+  let inFlight = 0;
+  let index = 0;
+
+  await new Promise<void>((resolve) => {
+    let settled = 0;
+    const total = items.length;
+
+    function availableSlots(): number {
+      const now = Date.now();
+      // Evict timestamps older than 60 seconds
+      while (windowTimestamps.length > 0 && now - windowTimestamps[0] > windowMs) {
+        windowTimestamps.shift();
+      }
+      const byRate = ratePerMinute - windowTimestamps.length;
+      const byConcurrency = maxConcurrent - inFlight;
+      return Math.min(byRate, byConcurrency);
+    }
+
+    function tryDispatch(): void {
+      const slots = availableSlots();
+
+      if (slots <= 0 || index >= total) {
+        // Schedule retry when the oldest window entry expires and frees a slot
+        if (index < total && windowTimestamps.length > 0) {
+          const wait = windowMs - (Date.now() - windowTimestamps[0]) + 1;
+          setTimeout(tryDispatch, wait);
+        }
+        return;
+      }
+
+      // Dispatch as many as current slots allow
+      const toDispatch = Math.min(slots, total - index);
+      for (let i = 0; i < toDispatch; i++) {
+        const item = items[index++];
+        inFlight++;
+        windowTimestamps.push(Date.now());
+
+        updateInventoryVariants(item.inventoryItemId, item.trackQuantity, item.variants)
+          .then(() => { successes++; })
+          .catch((err: unknown) => {
+            failures++;
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.warn(CTX, `Failed to update inventoryItem ${item.inventoryItemId}: ${msg}`);
+          })
+          .finally(() => {
+            inFlight--;
+            settled++;
+            if (settled === total) {
+              resolve();
+            } else {
+              tryDispatch();
+            }
+          });
+      }
+    }
+
+    tryDispatch();
+  });
+
+  return { successes, failures };
+}
