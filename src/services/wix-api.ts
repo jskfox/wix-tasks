@@ -115,6 +115,7 @@ export interface WixProduct {
   sku?: string;
   inventoryItemId?: string;
   priceData?: { price?: number; discountedPrice?: number };
+  stock?: { trackInventory?: boolean; quantity?: number; inStock?: boolean };
   variants?: Array<{
     id: string;
     sku?: string;
@@ -249,11 +250,12 @@ export async function updateInventoryVariantsConcurrent(
     inventoryItemId: string;
     trackQuantity: boolean;
     variants: Array<{ variantId: string; quantity?: number; inStock?: boolean }>;
+    sku?: string;
   }>,
   ratePerMinute = 180,
   maxConcurrent = 20,
-): Promise<{ successes: number; failures: number }> {
-  if (items.length === 0) return { successes: 0, failures: 0 };
+): Promise<{ successes: number; failures: number; failedSkus: string[] }> {
+  if (items.length === 0) return { successes: 0, failures: 0, failedSkus: [] };
 
   const windowMs = 60_000;
   // Timestamps of requests dispatched within the current sliding window
@@ -261,6 +263,7 @@ export async function updateInventoryVariantsConcurrent(
 
   let successes = 0;
   let failures = 0;
+  const failedSkus: string[] = [];
   let inFlight = 0;
   let index = 0;
 
@@ -302,6 +305,7 @@ export async function updateInventoryVariantsConcurrent(
           .then(() => { successes++; })
           .catch((err: unknown) => {
             failures++;
+            if (item.sku) failedSkus.push(item.sku);
             const msg = err instanceof Error ? err.message : String(err);
             logger.warn(CTX, `Failed to update inventoryItem ${item.inventoryItemId}: ${msg}`);
           })
@@ -320,5 +324,5 @@ export async function updateInventoryVariantsConcurrent(
     tryDispatch();
   });
 
-  return { successes, failures };
+  return { successes, failures, failedSkus };
 }

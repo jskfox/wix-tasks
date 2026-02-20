@@ -1,5 +1,5 @@
 import { BaseTask } from './base-task';
-import { config } from '../config';
+import { config, getEmailsForTask } from '../config';
 import { logger } from '../utils/logger';
 import { query } from '../services/database';
 import {
@@ -9,6 +9,7 @@ import {
   WixProduct,
 } from '../services/wix-api';
 import { getSetting, setSetting } from '../services/settings-db';
+import { sendEmail } from '../services/email';
 
 const CTX = 'PriceInventorySync';
 const WATERMARK_KEY = 'wix.price_inventory_sync.last_processed_timestamp';
@@ -209,12 +210,21 @@ export class PriceInventorySyncTask extends BaseTask {
       // ── STEP 4b: Price updates ────────────────────────────────────────────
       const priceItems: Array<{ productId: string; price: number; sku: string }> = [];
 
+      // ── Report data ───────────────────────────────────────────────────────
+      interface InvReportRow { sku: string; name: string; prevStock: number; newStock: number; blocked: boolean; failed: boolean; }
+      interface PriceReportRow { sku: string; name: string; prevPrice: number; newPrice: number; priceDown: boolean; failed: boolean; }
+      const invReport: InvReportRow[] = [];
+      const priceReport: PriceReportRow[] = [];
+
       for (const [sku, stockInfo] of stockMap) {
         const wixProduct = wixProductMap.get(sku);
         if (!wixProduct) {
           skipped++;
           continue;
         }
+
+        const productName = wixProduct.name ?? sku;
+        const prevStock = wixProduct.stock?.quantity ?? 0;
 
         if (wixProduct.inventoryItemId) {
           if (stockInfo.effectiveStock === 0) blocked++;
@@ -224,6 +234,7 @@ export class PriceInventorySyncTask extends BaseTask {
             variants: [{ variantId: defaultVariantId, quantity: stockInfo.effectiveStock, inStock: stockInfo.effectiveStock > 0 }],
             sku,
           });
+          invReport.push({ sku, name: productName, prevStock, newStock: stockInfo.effectiveStock, blocked: stockInfo.effectiveStock === 0, failed: false });
         } else {
           logger.warn(CTX, `⚠ SKU ${sku} has no inventoryItemId, skipping inventory update`);
         }
@@ -233,6 +244,7 @@ export class PriceInventorySyncTask extends BaseTask {
           const newPrice = stockInfo.precioFinal; // already rounded to 2 decimals
           if (currentPrice !== newPrice) {
             priceItems.push({ productId: wixProduct.id, price: newPrice, sku });
+            priceReport.push({ sku, name: productName, prevPrice: currentPrice, newPrice, priceDown: newPrice < currentPrice, failed: false });
           } else {
             logger.debug(CTX, `  = SKU: ${sku} | Precio sin cambio ($${newPrice}), omitiendo`);
           }
@@ -243,7 +255,12 @@ export class PriceInventorySyncTask extends BaseTask {
       const ratePerMin = 180;
       const invEst = inventoryItems.length <= ratePerMin ? '<1 min' : `~${Math.ceil(inventoryItems.length / ratePerMin)} min`;
       logger.info(CTX, `Sending ${inventoryItems.length} inventory updates (max ${ratePerMin}/min, est. ${invEst}, ${blocked} blocked at 0)...`);
-      const { successes: invOk, failures: invFail } = await updateInventoryVariantsConcurrent(inventoryItems);
+      const { successes: invOk, failures: invFail, failedSkus: invFailedSkus } = await updateInventoryVariantsConcurrent(inventoryItems);
+      // Mark failed rows in report
+      for (const failedSku of (invFailedSkus ?? [])) {
+        const row = invReport.find(r => r.sku === failedSku);
+        if (row) row.failed = true;
+      }
 
       // Prices — use same sliding window rate limiter shared with inventory
       const priceEst = priceItems.length <= ratePerMin ? '<1 min' : `~${Math.ceil(priceItems.length / ratePerMin)} min`;
@@ -281,6 +298,8 @@ export class PriceInventorySyncTask extends BaseTask {
                 .then(() => { priceOk++; })
                 .catch((err: unknown) => {
                   priceFail++;
+                  const row = priceReport.find(r => r.sku === item.sku);
+                  if (row) row.failed = true;
                   logger.warn(CTX, `Failed to update price for SKU ${item.sku}: ${err instanceof Error ? err.message : String(err)}`);
                 })
                 .finally(() => {
@@ -295,10 +314,15 @@ export class PriceInventorySyncTask extends BaseTask {
       })();
 
       logger.info(CTX, `${modeLabel} Sync complete — Inventory: ${invOk} ok, ${invFail} failed (${blocked} blocked at 0) | Prices: ${priceOk} ok, ${priceFail} failed | Skipped: ${skipped}`);
+
+      // ── STEP 5: Send email report ─────────────────────────────────────────
+      if (!this.testLimit) {
+        await sendSyncReport({ invReport, priceReport, invOk, invFail, priceOk, priceFail, skipped, blocked, modeLabel, minThreshold });
+      }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // STEP 5: Update watermark to latest processed timestamp
+    // STEP 6: Update watermark to latest processed timestamp
     // ══════════════════════════════════════════════════════════════════════════
     // Skip watermark update in test mode so we can re-run with more SKUs
     if (this.testLimit) {
@@ -310,5 +334,135 @@ export class PriceInventorySyncTask extends BaseTask {
       setSetting(WATERMARK_KEY, latestTimestamp);
       logger.info(CTX, `Watermark updated to: ${latestTimestamp}`);
     }
+  }
+}
+
+// ─── Email report helper ─────────────────────────────────────────────────────
+
+interface InvReportRow  { sku: string; name: string; prevStock: number; newStock: number; blocked: boolean; failed: boolean; }
+interface PriceReportRow { sku: string; name: string; prevPrice: number; newPrice: number; priceDown: boolean; failed: boolean; }
+
+async function sendSyncReport(opts: {
+  invReport: InvReportRow[];
+  priceReport: PriceReportRow[];
+  invOk: number; invFail: number;
+  priceOk: number; priceFail: number;
+  skipped: number; blocked: number;
+  modeLabel: string; minThreshold: number;
+}): Promise<void> {
+  const recipients = getEmailsForTask('erpPostgresSync');
+  if (recipients.length === 0) {
+    logger.warn(CTX, 'No email recipients configured for erpPostgresSync — skipping report');
+    return;
+  }
+
+  const { invReport, priceReport, invOk, invFail, priceOk, priceFail, skipped, blocked, modeLabel, minThreshold } = opts;
+  const now = new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City', hour12: false });
+  const fmt = (n: number) => `$${n.toFixed(2)}`;
+
+  const css = `
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f4f6f9;margin:0;padding:24px;color:#1a1a2e}
+    .wrap{max-width:900px;margin:0 auto}
+    h1{font-size:20px;font-weight:700;margin:0 0 4px}
+    .sub{color:#666;font-size:13px;margin-bottom:24px}
+    .summary{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+    .stat{background:#fff;border-radius:8px;padding:14px 20px;flex:1;min-width:130px;border-left:4px solid #4f46e5;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+    .stat.warn{border-color:#f59e0b}.stat.danger{border-color:#ef4444}.stat.ok{border-color:#10b981}
+    .stat-val{font-size:24px;font-weight:700;line-height:1}.stat-lbl{font-size:11px;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+    h2{font-size:15px;font-weight:600;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid #e5e7eb}
+    table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:24px;font-size:13px}
+    th{background:#f8fafc;text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;font-weight:600;border-bottom:1px solid #e5e7eb}
+    td{padding:9px 12px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    .badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600}
+    .badge-blocked{background:#fef3c7;color:#92400e}
+    .badge-fail{background:#fee2e2;color:#991b1b}
+    .badge-down{background:#fef3c7;color:#92400e}
+    .badge-ok{background:#d1fae5;color:#065f46}
+    .num{font-family:monospace;font-size:13px}
+    .arrow{color:#9ca3af;margin:0 4px}
+    .down{color:#ef4444;font-weight:600}
+    .up{color:#10b981}
+    .footer{text-align:center;font-size:11px;color:#9ca3af;margin-top:24px}
+  `;
+
+  // ── Inventory table ──
+  const invRows = invReport.map(r => {
+    const badge = r.failed
+      ? '<span class="badge badge-fail">ERROR</span>'
+      : r.blocked
+        ? '<span class="badge badge-blocked">BLOQUEADO</span>'
+        : '<span class="badge badge-ok">OK</span>';
+    const stockChange = r.prevStock === r.newStock
+      ? `<span class="num">${r.newStock}</span>`
+      : `<span class="num">${r.prevStock}</span><span class="arrow">→</span><span class="num ${r.newStock < r.prevStock ? 'down' : 'up'}">${r.newStock}</span>`;
+    return `<tr>
+      <td class="num">${r.sku}</td>
+      <td>${r.name}</td>
+      <td>${stockChange}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+
+  const invTable = invReport.length === 0 ? '<p style="color:#888;font-size:13px">Sin cambios de inventario.</p>' : `
+    <table>
+      <thead><tr><th>SKU</th><th>Producto</th><th>Stock (anterior → nuevo)</th><th>Estado</th></tr></thead>
+      <tbody>${invRows}</tbody>
+    </table>`;
+
+  // ── Price table ──
+  const priceRows = priceReport.map(r => {
+    const badge = r.failed
+      ? '<span class="badge badge-fail">ERROR</span>'
+      : r.priceDown
+        ? '<span class="badge badge-down">↓ BAJÓ</span>'
+        : '<span class="badge badge-ok">↑ SUBIÓ</span>';
+    const priceChange = `<span class="num">${fmt(r.prevPrice)}</span><span class="arrow">→</span><span class="num ${r.priceDown ? 'down' : 'up'}">${fmt(r.newPrice)}</span>`;
+    return `<tr>
+      <td class="num">${r.sku}</td>
+      <td>${r.name}</td>
+      <td>${priceChange}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+
+  const priceTable = priceReport.length === 0 ? '<p style="color:#888;font-size:13px">Sin cambios de precio.</p>' : `
+    <table>
+      <thead><tr><th>SKU</th><th>Producto</th><th>Precio (anterior → nuevo)</th><th>Estado</th></tr></thead>
+      <tbody>${priceRows}</tbody>
+    </table>`;
+
+  const totalFails = invFail + priceFail;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${css}</style></head><body>
+  <div class="wrap">
+    <h1>Reporte de Sincronización Wix ${modeLabel}</h1>
+    <div class="sub">${now} — umbral mínimo de stock: ${minThreshold}</div>
+
+    <div class="summary">
+      <div class="stat ok"><div class="stat-val">${invOk}</div><div class="stat-lbl">Inventario OK</div></div>
+      <div class="stat warn"><div class="stat-val">${blocked}</div><div class="stat-lbl">Bloqueados (stock=0)</div></div>
+      <div class="stat ok"><div class="stat-val">${priceOk}</div><div class="stat-lbl">Precios actualizados</div></div>
+      <div class="stat ${totalFails > 0 ? 'danger' : 'ok'}"><div class="stat-val">${totalFails}</div><div class="stat-lbl">Errores</div></div>
+      <div class="stat"><div class="stat-val">${skipped}</div><div class="stat-lbl">Omitidos</div></div>
+    </div>
+
+    <h2>Cambios de Inventario (${invReport.length})</h2>
+    ${invTable}
+
+    <h2>Cambios de Precio (${priceReport.length})</h2>
+    ${priceTable}
+
+    <div class="footer">Generado automáticamente por wix-tasks · price-inventory-sync</div>
+  </div>
+  </body></html>`;
+
+  const totalChanges = invReport.length + priceReport.length;
+  const subject = `Wix Sync ${modeLabel} — ${totalChanges} cambio(s) · ${invFail + priceFail > 0 ? `⚠ ${invFail + priceFail} error(es)` : '✓ sin errores'} · ${now}`;
+
+  try {
+    await sendEmail({ to: recipients, subject, html });
+    logger.info(CTX, `Sync report sent to ${recipients.join(', ')}`);
+  } catch (err) {
+    logger.warn(CTX, `Failed to send sync report: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
