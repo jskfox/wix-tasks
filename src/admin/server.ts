@@ -339,8 +339,8 @@ body{font-family:var(--font-sans);background:var(--surface-base);color:var(--ink
 .task-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:var(--space-md)}
 .task-card{background:var(--surface-1);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:var(--space-lg);transition:all .15s}
 .task-card:hover{border-color:var(--border-emphasis)}
-.task-card.disabled{opacity:0.6;background:var(--surface-2);border-color:var(--border-soft)}
-.task-card.disabled:hover{border-color:var(--border-std)}
+.task-card.disabled{opacity:0.6;background:var(--surface-2);border-color:border-color:rgba(155, 0, 62, 0.43)}
+.task-card.disabled:hover{border-color:border-color:rgba(255,0,102,0.3)}
 .task-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:var(--space-sm)}
 .task-name{font-size:14px;font-weight:600;font-family:var(--font-mono);letter-spacing:-0.3px}
 .task-desc{font-size:12px;color:var(--ink-tertiary);margin-bottom:var(--space-md);line-height:1.4}

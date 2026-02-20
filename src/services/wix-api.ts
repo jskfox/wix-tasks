@@ -198,17 +198,15 @@ export async function queryProductsBySku(skus: string[]): Promise<WixProduct[]> 
 
 // ─── Update Product Variants (price) ────────────────────────────────────────────
 
-export async function updateProductVariantPrice(
+export async function updateProductPrice(
   productId: string,
-  variants: Array<{ choices?: Record<string, string>; price: number }>,
+  price: number,
 ): Promise<void> {
-  // TODO: UNCOMMENT WHEN READY FOR PRODUCTION — Wix write operation
-  // await wixFetch({
-  //   method: 'PATCH',
-  //   path: `/stores/v1/products/${productId}/variants`,
-  //   body: { variants },
-  // });
-  logger.info(CTX, `[DRY-RUN] Would update price for product ${productId}`, variants);
+  await wixFetch({
+    method: 'PATCH',
+    path: `/stores/v1/products/${productId}`,
+    body: { product: { priceData: { price } } },
+  });
 }
 
 // ─── Inventory ──────────────────────────────────────────────────────────────────
