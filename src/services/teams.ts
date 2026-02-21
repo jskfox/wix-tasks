@@ -25,49 +25,22 @@ export async function sendTeamsSyncNotification(webhookUrl: string, s: TeamsSync
   const statusEmoji = totalFails > 0 ? '⚠️' : '✅';
   const statusText  = totalFails > 0 ? `${totalFails} error(es)` : 'Sin errores';
 
-  const facts = [
-    { name: '📦 Inventario OK',        value: String(s.invOk) },
-    { name: '⛔ Bloqueados (stock=0)', value: String(s.blocked) },
-    { name: '💲 Precios actualizados', value: String(s.priceOk) },
-    { name: '🆕 Nuevas promos',        value: String(s.promoNew) },
-    { name: '❌ Promos eliminadas',    value: String(s.promoDel) },
-    { name: '🏷 Col. Descuentos',      value: `+${s.descuentosAddOk} / -${s.descuentosRemOk}` },
-    { name: '🎟 Col. Descuento10',     value: `+${s.descuento10AddOk} / -${s.descuento10RemOk}` },
-    { name: '⏭ Omitidos',             value: String(s.skipped) },
-    { name: '🚨 Errores',              value: String(totalFails) },
+  const lines = [
+    `${statusEmoji} **Wix Sync ${s.modeLabel} — ${statusText}**`,
+    `🕐 ${s.now}`,
+    ``,
+    `📦 Inventario OK: **${s.invOk}**`,
+    `⛔ Bloqueados (stock=0): **${s.blocked}**`,
+    `💲 Precios actualizados: **${s.priceOk}**`,
+    `🆕 Nuevas promos: **${s.promoNew}**`,
+    `❌ Promos eliminadas: **${s.promoDel}**`,
+    `🏷 Col. Descuentos: **+${s.descuentosAddOk} / -${s.descuentosRemOk}**`,
+    `🎟 Col. Descuento10: **+${s.descuento10AddOk} / -${s.descuento10RemOk}**`,
+    `⏭ Omitidos: **${s.skipped}**`,
+    `🚨 Errores: **${totalFails}**`,
   ];
 
-  const body = {
-    type: 'message',
-    attachments: [
-      {
-        contentType: 'application/vnd.microsoft.card.adaptive',
-        content: {
-          $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
-          type: 'AdaptiveCard',
-          version: '1.4',
-          body: [
-            {
-              type: 'TextBlock',
-              size: 'Medium',
-              weight: 'Bolder',
-              text: `${statusEmoji} Wix Sync ${s.modeLabel} — ${statusText}`,
-            },
-            {
-              type: 'TextBlock',
-              text: s.now,
-              isSubtle: true,
-              spacing: 'None',
-            },
-            {
-              type: 'FactSet',
-              facts,
-            },
-          ],
-        },
-      },
-    ],
-  };
+  const body = { text: lines.join('\n') };
 
   const res = await fetch(webhookUrl, {
     method: 'POST',
