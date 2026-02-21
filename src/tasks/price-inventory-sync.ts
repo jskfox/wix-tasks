@@ -637,7 +637,7 @@ async function sendSyncReport(opts: {
     logger.warn(CTX, `Failed to send sync report: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  const teamsWebhook = config.wix.teamsWebhook;
+  const teamsWebhook = config.task.teamsWebhook;
   if (teamsWebhook) {
     const promoNewRows = priceReport.filter(r => r.isPromo && !r.wasPromo);
     const promoDelRows = priceReport.filter(r => !r.isPromo && r.wasPromo);

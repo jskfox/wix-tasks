@@ -4,6 +4,7 @@ import { logger } from '../utils/logger';
 import { mssqlQuery } from '../services/mssql';
 import { getPool } from '../services/database';
 import { sendEmail } from '../services/email';
+import { sendTeamsNotification } from '../services/teams';
 import { Readable } from 'stream';
 import { from as copyFrom } from 'pg-copy-streams';
 
@@ -262,8 +263,9 @@ export class ErpPostgresSyncTask extends BaseTask {
       await this.updateSyncDate();
 
       // ── PASO 7: ANALIZAR CAMBIOS DE PRECIOS ───────────────────────────────
+      let analysisResults;
       try {
-        const analysisResults = await this.analyzePriceChanges();
+        analysisResults = await this.analyzePriceChanges();
         await this.sendPriceChangeReport(analysisResults);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -271,10 +273,32 @@ export class ErpPostgresSyncTask extends BaseTask {
         await this.sendErrorEmail('Error en Análisis de Precios', msg);
       }
 
+      // ── PASO 8: NOTIFICACIÓN TEAMS ────────────────────────────────────────
+      const now = new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City', hour12: false });
+      await sendTeamsNotification({
+        title: 'ERP → PostgreSQL Sync',
+        subtitle: now,
+        hasErrors: !etlSuccess,
+        rows: [
+          { name: '📦 Filas sincronizadas',       value: String(data.length) },
+          { name: '🔴 Cambios urgentes (>30%)',   value: String(analysisResults?.prioridadAlta.length ?? '—') },
+          { name: '🟠 Cambios a verificar (>15%)', value: String(analysisResults?.prioridadMedia.length ?? '—') },
+          { name: '🟡 Cambios a revisar (>10%)',  value: String(analysisResults?.prioridadBaja.length ?? '—') },
+          { name: '✅ ETL completado',             value: etlSuccess ? 'Sí' : 'No' },
+        ],
+      });
+
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.log(`ERROR DURANTE EL PROCESO ETL: ${msg}`);
       await this.sendErrorEmail('Error en Sincronización ERP→PostgreSQL', msg);
+      const now = new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City', hour12: false });
+      await sendTeamsNotification({
+        title: 'ERP → PostgreSQL Sync — ERROR',
+        subtitle: now,
+        hasErrors: true,
+        rows: [{ name: '🚨 Error', value: msg.slice(0, 200) }],
+      });
     }
   }
 

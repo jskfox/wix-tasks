@@ -1,6 +1,53 @@
 import { logger } from '../utils/logger';
+import { config } from '../config';
 
 const CTX = 'Teams';
+
+// ─── Generic notification ────────────────────────────────────────────────────
+
+export interface TeamsRow { name: string; value: string }
+
+export async function sendTeamsNotification(opts: {
+  title: string;
+  subtitle?: string;
+  rows: TeamsRow[];
+  hasErrors: boolean;
+}): Promise<void> {
+  const webhookUrl = config.task.teamsWebhook;
+  if (!webhookUrl) return;
+
+  const statusEmoji = opts.hasErrors ? '⚠️' : '✅';
+  const body = {
+    '@type': 'MessageCard',
+    '@context': 'https://schema.org/extensions',
+    themeColor: opts.hasErrors ? 'FF0000' : '00B050',
+    summary: opts.title,
+    sections: [
+      {
+        activityTitle: `${statusEmoji} ${opts.title}`,
+        activitySubtitle: opts.subtitle ?? '',
+        facts: opts.rows.map(r => ({ name: r.name, value: r.value })),
+        markdown: true,
+      },
+    ],
+  };
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      logger.error(CTX, `Teams webhook failed: ${res.status} ${res.statusText} — ${text}`);
+    } else {
+      logger.info(CTX, `Teams notification sent: ${opts.title}`);
+    }
+  } catch (err) {
+    logger.warn(CTX, `Teams notification error: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
 
 export interface TeamsSyncSummary {
   modeLabel: string;

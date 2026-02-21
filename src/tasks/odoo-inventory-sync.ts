@@ -3,6 +3,7 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 import { mssqlQuery } from '../services/mssql';
 import { executeKw, searchAllIds, searchReadAll, readRecords, OdooRecord } from '../services/odoo';
+import { sendTeamsNotification } from '../services/teams';
 
 const CTX = 'OdooInventorySync';
 const EMP_ID = config.mssql.empId;
@@ -318,6 +319,21 @@ export class OdooInventorySyncTask extends BaseTask {
     const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
     logger.info(CTX, `═══ Full sync complete in ${elapsed}s ═══`);
     this.printDiagnostics();
+
+    const now = new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City', hour12: false });
+    await sendTeamsNotification({
+      title: `Odoo Full Sync — ${elapsed}s`,
+      subtitle: now,
+      hasErrors: this.phaseErrors.length > 0,
+      rows: [
+        { name: '📦 Artículos ERP',          value: String(articleMap.size) },
+        { name: '➕ Crear en Odoo',           value: String(diff.toCreate.length) },
+        { name: '✏️ Actualizar en Odoo',      value: String(diff.toUpdate.length) },
+        { name: '🗄 Archivar en Odoo',        value: String(diff.toArchive.length) },
+        { name: '🚨 Fases con error',         value: String(this.phaseErrors.length) },
+        { name: '⏱ Tiempo total',             value: `${elapsed}s` },
+      ],
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -403,6 +419,18 @@ export class OdooInventorySyncTask extends BaseTask {
     const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
     logger.info(CTX, `═══ Stock-only sync complete in ${elapsed}s ═══`);
     this.printDiagnostics();
+
+    const now = new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City', hour12: false });
+    await sendTeamsNotification({
+      title: `Odoo Stock Sync — ${elapsed}s`,
+      subtitle: now,
+      hasErrors: this.phaseErrors.length > 0,
+      rows: [
+        { name: '📦 Filas de stock MSSQL',    value: String(stockRows.length) },
+        { name: '🚨 Fases con error',         value: String(this.phaseErrors.length) },
+        { name: '⏱ Tiempo total',             value: `${elapsed}s` },
+      ],
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

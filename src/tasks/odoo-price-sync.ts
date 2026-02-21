@@ -4,6 +4,7 @@ import { logger } from '../utils/logger';
 import { mssqlQuery } from '../services/mssql';
 import { query as pgQuery } from '../services/database';
 import { executeKw, searchReadAll, OdooRecord } from '../services/odoo';
+import { sendTeamsNotification } from '../services/teams';
 
 const CTX = 'OdooPriceSync';
 const EMP_ID = config.mssql.empId;
@@ -198,5 +199,19 @@ export class OdooPriceSyncTask extends BaseTask {
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
     logger.info(CTX, `  Updated: ${updated}, Errors: ${errors}`);
     logger.info(CTX, `─── Price sync done in ${elapsed}s ───`);
+
+    const now = new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City', hour12: false });
+    await sendTeamsNotification({
+      title: `Odoo Price Sync — ${elapsed}s`,
+      subtitle: now,
+      hasErrors: errors > 0,
+      rows: [
+        { name: '📦 Artículos en ERP',      value: String(rows.length) },
+        { name: '🏷 SKUs en promo',          value: String(promoMap.size) },
+        { name: '💲 Precios actualizados',   value: String(updated) },
+        { name: '🚨 Errores',               value: String(errors) },
+        { name: '⏱ Tiempo',                 value: `${elapsed}s` },
+      ],
+    });
   }
 }

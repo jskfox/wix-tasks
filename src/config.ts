@@ -46,7 +46,10 @@ export const config = {
     get minStockThreshold() { return getSettingInt('wix.min_stock_threshold', 10); },
     get dryRun() { return getSettingBool('wix.dry_run', true); },
     get branchPrefix() { return getSetting('wix.branch_prefix', '1'); },
-    get teamsWebhook() { return getSetting('wix.teams_webhook', ''); },
+  },
+
+  task: {
+    get teamsWebhook() { return getSetting('task.teams_webhook', ''); },
   },
 
   odoo: {

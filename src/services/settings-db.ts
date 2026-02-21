@@ -68,7 +68,7 @@ const DEFAULTS: DefaultSetting[] = [
   { key: 'wix.min_stock_threshold', value: '10', category: 'wix', description: 'Umbral mínimo de stock total. Si el stock sumado de todas las sucursales es menor a este valor, se pone en 0 en Wix.' },
   { key: 'wix.dry_run', value: 'true', category: 'wix', description: 'Modo prueba: no escribe en Wix (true/false). Cambiar a false para activar sincronización real.' },
   { key: 'wix.branch_prefix', value: '1', category: 'wix', description: 'Prefijo de sucursales a incluir en suma de stock (ej: "1" para Mexicali, "4" para Hermosillo).' },
-  { key: 'wix.teams_webhook', value: '', category: 'wix', description: 'URL del webhook de Teams (Power Automate) para notificaciones de sincronización Wix. Dejar vacío para deshabilitar.' },
+  { key: 'task.teams_webhook', value: '', category: 'task', description: 'URL del webhook de Teams (Power Automate) para notificaciones de todas las tareas programadas. Dejar vacío para deshabilitar.' },
 
   // ERP→Odoo sync
   { key: 'erp_odoo.dry_run', value: 'false', category: 'erp_odoo', description: 'Modo prueba: no escribe en Odoo (true/false)' },
@@ -134,6 +134,38 @@ function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_task_logs_timestamp ON task_logs(timestamp);
     CREATE INDEX IF NOT EXISTS idx_task_logs_context ON task_logs(context);
   `);
+
+  // ── Migrations (run on every startup, idempotent) ─────────────────────────
+  const migrations: { id: string; sql: string }[] = [
+    {
+      id: 'rename_wix_teams_webhook_to_task',
+      sql: `
+        UPDATE settings
+        SET key = 'task.teams_webhook',
+            category = 'task',
+            description = 'URL del webhook de Teams (Power Automate) para notificaciones de todas las tareas programadas. Dejar vacío para deshabilitar.'
+        WHERE key = 'wix.teams_webhook'
+          AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'task.teams_webhook');
+      `,
+    },
+  ];
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS migrations (
+      id         TEXT PRIMARY KEY,
+      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  const migApplied = db.prepare(`SELECT id FROM migrations WHERE id = ?`);
+  const migInsert  = db.prepare(`INSERT INTO migrations (id) VALUES (?)`);
+
+  for (const m of migrations) {
+    if (migApplied.get(m.id)) continue;
+    db.exec(m.sql);
+    migInsert.run(m.id);
+    console.log(`${TAG} Migration applied: ${m.id}`);
+  }
 
   // Seed defaults (only inserts if key doesn't exist)
   const insert = db.prepare(`
