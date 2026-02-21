@@ -148,6 +148,10 @@ function getDb(): Database.Database {
           AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'task.teams_webhook');
       `,
     },
+    {
+      id: 'delete_wix_teams_webhook_obsolete',
+      sql: `DELETE FROM settings WHERE key = 'wix.teams_webhook';`,
+    },
   ];
 
   db.exec(`
