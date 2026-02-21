@@ -13,6 +13,7 @@ import {
 } from '../services/wix-api';
 import { getSetting } from '../services/settings-db';
 import { sendEmail } from '../services/email';
+import { sendTeamsSyncNotification } from '../services/teams';
 
 const CTX = 'PriceInventorySync';
 
@@ -634,5 +635,25 @@ async function sendSyncReport(opts: {
     logger.info(CTX, `Sync report sent to ${recipients.join(', ')}`);
   } catch (err) {
     logger.warn(CTX, `Failed to send sync report: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  const teamsWebhook = config.wix.teamsWebhook;
+  if (teamsWebhook) {
+    const promoNewRows = priceReport.filter(r => r.isPromo && !r.wasPromo);
+    const promoDelRows = priceReport.filter(r => !r.isPromo && r.wasPromo);
+    try {
+      await sendTeamsSyncNotification(teamsWebhook, {
+        modeLabel, now,
+        invOk, invFail, blocked,
+        priceOk, priceFail,
+        descuentosAddOk, descuentosRemOk,
+        descuento10AddOk, descuento10RemOk,
+        colFail, skipped,
+        promoNew: promoNewRows.length,
+        promoDel: promoDelRows.length,
+      });
+    } catch (err) {
+      logger.warn(CTX, `Failed to send Teams notification: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 }

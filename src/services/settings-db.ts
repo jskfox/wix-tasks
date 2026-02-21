@@ -68,6 +68,7 @@ const DEFAULTS: DefaultSetting[] = [
   { key: 'wix.min_stock_threshold', value: '10', category: 'wix', description: 'Umbral mínimo de stock total. Si el stock sumado de todas las sucursales es menor a este valor, se pone en 0 en Wix.' },
   { key: 'wix.dry_run', value: 'true', category: 'wix', description: 'Modo prueba: no escribe en Wix (true/false). Cambiar a false para activar sincronización real.' },
   { key: 'wix.branch_prefix', value: '1', category: 'wix', description: 'Prefijo de sucursales a incluir en suma de stock (ej: "1" para Mexicali, "4" para Hermosillo).' },
+  { key: 'wix.teams_webhook', value: '', category: 'wix', description: 'URL del webhook de Teams (Power Automate) para notificaciones de sincronización Wix. Dejar vacío para deshabilitar.' },
 
   // ERP→Odoo sync
   { key: 'erp_odoo.dry_run', value: 'false', category: 'erp_odoo', description: 'Modo prueba: no escribe en Odoo (true/false)' },
