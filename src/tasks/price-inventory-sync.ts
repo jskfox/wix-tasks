@@ -606,11 +606,11 @@ async function sendSyncReport(opts: {
     <div class="sub">${now} — umbral mínimo de stock: ${minThreshold}</div>
 
     <div class="summary">
-      <div class="stat ok"><div class="stat-val">${invOk}</div><div class="stat-lbl">Inventario OK</div></div>
-      <div class="stat warn"><div class="stat-val">${blocked}</div><div class="stat-lbl">Bloqueados (stock=0)</div></div>
+      <div class="stat ok"><div class="stat-val">${invOk}</div><div class="stat-lbl">Inventario actualizado</div></div>
+      <div class="stat warn"><div class="stat-val">${blocked}</div><div class="stat-lbl">Desactivados (stock=0)</div></div>
       <div class="stat ok"><div class="stat-val">${priceOk}</div><div class="stat-lbl">Precios actualizados</div></div>
-      <div class="stat ${colFail > 0 ? 'danger' : 'ok'}"><div class="stat-val">+${descuentosAddOk} / -${descuentosRemOk}</div><div class="stat-lbl">Col. Descuentos</div></div>
-      <div class="stat ${colFail > 0 ? 'danger' : 'ok'}"><div class="stat-val">+${descuento10AddOk} / -${descuento10RemOk}</div><div class="stat-lbl">Col. Descuento10</div></div>
+      <div class="stat ${colFail > 0 ? 'danger' : 'ok'}"><div class="stat-val">+${descuentosAddOk} / -${descuentosRemOk}</div><div class="stat-lbl">Promos (Descuentos)</div></div>
+      <div class="stat ${colFail > 0 ? 'danger' : 'ok'}"><div class="stat-val">+${descuento10AddOk} / -${descuento10RemOk}</div><div class="stat-lbl">Productos para cupón Descuento10</div></div>
       <div class="stat ${totalFails > 0 ? 'danger' : 'ok'}"><div class="stat-val">${totalFails}</div><div class="stat-lbl">Errores</div></div>
       <div class="stat"><div class="stat-val">${skipped}</div><div class="stat-lbl">Omitidos</div></div>
     </div>
@@ -623,12 +623,12 @@ async function sendSyncReport(opts: {
     ${secPriceDown}
     ${secPriceUp}
 
-    <div class="footer">Generado automáticamente por wix-tasks · price-inventory-sync</div>
+    <div class="footer">Generado automáticamente por cron wix-tasks · price-inventory-sync</div>
   </div>
   </body></html>`;
 
   const totalChanges = invReport.length + priceReport.length;
-  const subject = `Wix Sync ${modeLabel} — ${totalChanges} cambio(s) · ${invFail + priceFail > 0 ? `⚠ ${invFail + priceFail} error(es)` : '✓ sin errores'} · ${now}`;
+  const subject = `Sincronizar ERP con ecommerce (Wix) ${modeLabel} — ${totalChanges} cambio(s) · ${invFail + priceFail > 0 ? `⚠ ${invFail + priceFail} error(es)` : '✓ sin errores'} · ${now}`;
 
   try {
     await sendEmail({ to: recipients, subject, html });

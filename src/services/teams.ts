@@ -26,13 +26,13 @@ export async function sendTeamsSyncNotification(webhookUrl: string, s: TeamsSync
   const statusText  = totalFails > 0 ? `${totalFails} error(es)` : 'Sin errores';
 
   const rows = [
-    ` Inventario OK: ${s.invOk}`,
-    `⛔ Bloqueados (stock=0): ${s.blocked}`,
+    `📦 Inventario actualizado: ${s.invOk}`,
+    `⛔ Desactivados (stock=0): ${s.blocked}`,
     `💲 Precios actualizados: ${s.priceOk}`,
     `🆕 Nuevas promos: ${s.promoNew}`,
     `❌ Promos eliminadas: ${s.promoDel}`,
-    `🏷 Col. Descuentos: +${s.descuentosAddOk} / -${s.descuentosRemOk}`,
-    `🎟 Col. Descuento10: +${s.descuento10AddOk} / -${s.descuento10RemOk}`,
+    `🏷 Categoría Promos(Descuentos): +${s.descuentosAddOk} / -${s.descuentosRemOk}`,
+    `🎟 Productos para cupón Descuento10: +${s.descuento10AddOk} / -${s.descuento10RemOk}`,
     `⏭ Omitidos: ${s.skipped}`,
     `🚨 Errores: ${totalFails}`,
   ];
@@ -42,7 +42,7 @@ export async function sendTeamsSyncNotification(webhookUrl: string, s: TeamsSync
     '@type': 'MessageCard',
     '@context': 'https://schema.org/extensions',
     themeColor: totalFails > 0 ? 'FF0000' : '00B050',
-    summary: `Wix Sync ${s.modeLabel}`,
+    summary: `Sincronización ERP con eCommerce (Wix) ${s.modeLabel}`,
     sections: [
       {
         activityTitle: `${statusEmoji} Wix Sync ${s.modeLabel} — ${statusText}`,
