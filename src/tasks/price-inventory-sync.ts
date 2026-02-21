@@ -339,7 +339,10 @@ export class PriceInventorySyncTask extends BaseTask {
           const inD10      = colIds.includes(descuento10Id);
           const inPromo    = !!(wp.sku && stockMap.get(wp.sku)?.promo);
           const inExcluded = [...excludedFromDescuento10].some(id => colIds.includes(id));
-          const shouldBeIn = !inPromo && !inExcluded;
+          // Products with no stock data (not in PostgreSQL) are assumed in-stock
+          const skuStock   = wp.sku ? stockMap.get(wp.sku) : undefined;
+          const hasStock   = skuStock ? skuStock.effectiveStock > 0 : true;
+          const shouldBeIn = !inPromo && !inExcluded && hasStock;
           if (shouldBeIn && !inD10) descuento10Add.push(wp.id);
           if (!shouldBeIn && inD10) descuento10Remove.push(wp.id);
         }
@@ -452,7 +455,7 @@ export class PriceInventorySyncTask extends BaseTask {
 
       // ── STEP 5: Send email report ─────────────────────────────────────────
       if (!this.testLimit) {
-        await sendSyncReport({ invReport, priceReport, invOk, invFail, priceOk, priceFail, skipped, blocked, colAddOk, colRemOk, colFail, modeLabel, minThreshold });
+        await sendSyncReport({ invReport, priceReport, invOk, invFail, priceOk, priceFail, skipped, blocked, descuentosAddOk, descuentosRemOk, descuento10AddOk, descuento10RemOk, colFail, modeLabel, minThreshold });
       }
     }
 
@@ -470,7 +473,9 @@ async function sendSyncReport(opts: {
   invOk: number; invFail: number;
   priceOk: number; priceFail: number;
   skipped: number; blocked: number;
-  colAddOk: number; colRemOk: number; colFail: number;
+  descuentosAddOk: number; descuentosRemOk: number;
+  descuento10AddOk: number; descuento10RemOk: number;
+  colFail: number;
   modeLabel: string; minThreshold: number;
 }): Promise<void> {
   const recipients = getEmailsForTask('erpPostgresSync');
@@ -479,7 +484,7 @@ async function sendSyncReport(opts: {
     return;
   }
 
-  const { invReport, priceReport, invOk, invFail, priceOk, priceFail, skipped, blocked, colAddOk, colRemOk, colFail, modeLabel, minThreshold } = opts;
+  const { invReport, priceReport, invOk, invFail, priceOk, priceFail, skipped, blocked, descuentosAddOk, descuentosRemOk, descuento10AddOk, descuento10RemOk, colFail, modeLabel, minThreshold } = opts;
   const now = new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City', hour12: false });
   const fmt = (n: number) => `$${n.toFixed(2)}`;
 
@@ -603,7 +608,8 @@ async function sendSyncReport(opts: {
       <div class="stat ok"><div class="stat-val">${invOk}</div><div class="stat-lbl">Inventario OK</div></div>
       <div class="stat warn"><div class="stat-val">${blocked}</div><div class="stat-lbl">Bloqueados (stock=0)</div></div>
       <div class="stat ok"><div class="stat-val">${priceOk}</div><div class="stat-lbl">Precios actualizados</div></div>
-      <div class="stat ${colFail > 0 ? 'danger' : 'ok'}"><div class="stat-val">+${colAddOk} / -${colRemOk}</div><div class="stat-lbl">Descuento10</div></div>
+      <div class="stat ${colFail > 0 ? 'danger' : 'ok'}"><div class="stat-val">+${descuentosAddOk} / -${descuentosRemOk}</div><div class="stat-lbl">Col. Descuentos</div></div>
+      <div class="stat ${colFail > 0 ? 'danger' : 'ok'}"><div class="stat-val">+${descuento10AddOk} / -${descuento10RemOk}</div><div class="stat-lbl">Col. Descuento10</div></div>
       <div class="stat ${totalFails > 0 ? 'danger' : 'ok'}"><div class="stat-val">${totalFails}</div><div class="stat-lbl">Errores</div></div>
       <div class="stat"><div class="stat-val">${skipped}</div><div class="stat-lbl">Omitidos</div></div>
     </div>
