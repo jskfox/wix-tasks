@@ -70,16 +70,27 @@ export class PriceInventorySyncTask extends BaseTask {
     logger.info(CTX, `${modeLabel} Starting price+inventory sync (stock branches=${branchPrefix}*, price sucursal=${sucursalWix}, threshold=${minThreshold})...`);
 
     // ══════════════════════════════════════════════════════════════════════════
-    // STEP 1: Get ALL products from Wix + resolve Descuento10 collection ID
+    // STEP 1: Get ALL products from Wix + resolve collection IDs
     // ══════════════════════════════════════════════════════════════════════════
-    const [wixProducts, descuento10Id] = await Promise.all([
+    const [wixProducts, descuentosId, descuento10Id, tabId, madId, aceId, conId] = await Promise.all([
       queryAllWixProducts(),
+      findCollectionByName('Descuentos'),
       findCollectionByName('Descuento10'),
+      findCollectionByName('TABLEROS'),
+      findCollectionByName('MADERAS'),
+      findCollectionByName('ACEROS'),
+      findCollectionByName('CONSTRUCCION'),
     ]);
-    if (descuento10Id) {
-      logger.info(CTX, `Colección Descuento10 encontrada: ${descuento10Id}`);
-    } else {
-      logger.warn(CTX, 'Colección "Descuento10" no encontrada en Wix — se omitirá sincronización de colección');
+    // Set of collection IDs whose members must be excluded from Descuento10
+    const excludedFromDescuento10 = new Set<string>(
+      [tabId, madId, aceId, conId].filter((id): id is string => id !== null),
+    );
+    for (const [name, id] of [['Descuentos', descuentosId], ['Descuento10', descuento10Id]] as [string, string | null][]) {
+      if (id) logger.info(CTX, `Colección "${name}" encontrada: ${id}`);
+      else    logger.warn(CTX, `Colección "${name}" no encontrada en Wix — se omitirá sincronización`);
+    }
+    for (const [name, id] of [['TABLEROS', tabId], ['MADERAS', madId], ['ACEROS', aceId], ['CONSTRUCCION', conId]] as [string, string | null][]) {
+      if (!id) logger.warn(CTX, `Colección "${name}" no encontrada — sus productos NO serán excluidos de Descuento10`);
     }
 
     if (wixProducts.length === 0) {
@@ -298,24 +309,47 @@ export class PriceInventorySyncTask extends BaseTask {
         }
       }
 
-      // ── STEP 4c: Collection membership for Descuento10 ──────────────────
-      const collectionToAdd:    string[] = [];  // product IDs to add to Descuento10
-      const collectionToRemove: string[] = [];  // product IDs to remove from Descuento10
+      // ── STEP 4c: Collection membership ───────────────────────────────────
+      // "Descuentos"  → productos EN promo
+      // "Descuento10" → todos excepto: en promo, en TABLEROS/MADERAS/ACEROS/CONSTRUCCION
+      const descuentosAdd:    string[] = [];
+      const descuentosRemove: string[] = [];
+      const descuento10Add:    string[] = [];
+      const descuento10Remove: string[] = [];
 
-      if (descuento10Id) {
+      // "Descuentos": iterar stockMap (productos con datos en PostgreSQL)
+      if (descuentosId) {
         for (const [sku, stockInfo] of stockMap) {
-          const wixProduct = wixProductMap.get(sku);
-          if (!wixProduct?.id) continue;
-          const inCollection = (wixProduct.collectionIds ?? []).includes(descuento10Id);
-          const shouldBeIn   = !!stockInfo.promo;
-          if (shouldBeIn && !inCollection) collectionToAdd.push(wixProduct.id);
-          if (!shouldBeIn && inCollection)  collectionToRemove.push(wixProduct.id);
+          const wp = wixProductMap.get(sku);
+          if (!wp?.id) continue;
+          const colIds     = wp.collectionIds ?? [];
+          const inCol      = colIds.includes(descuentosId);
+          const shouldBeIn = !!stockInfo.promo;
+          if (shouldBeIn && !inCol) descuentosAdd.push(wp.id);
+          if (!shouldBeIn && inCol) descuentosRemove.push(wp.id);
         }
-        logger.info(CTX, `Descuento10: +${collectionToAdd.length} agregar, -${collectionToRemove.length} quitar`);
+        logger.info(CTX, `Descuentos: +${descuentosAdd.length} agregar, -${descuentosRemove.length} quitar`);
+      }
+
+      // "Descuento10": iterar catálogo completo de Wix
+      if (descuento10Id) {
+        for (const wp of wixProducts) {
+          if (!wp.id) continue;
+          const colIds     = wp.collectionIds ?? [];
+          const inD10      = colIds.includes(descuento10Id);
+          const inPromo    = !!(wp.sku && stockMap.get(wp.sku)?.promo);
+          const inExcluded = [...excludedFromDescuento10].some(id => colIds.includes(id));
+          const shouldBeIn = !inPromo && !inExcluded;
+          if (shouldBeIn && !inD10) descuento10Add.push(wp.id);
+          if (!shouldBeIn && inD10) descuento10Remove.push(wp.id);
+        }
+        logger.info(CTX, `Descuento10: +${descuento10Add.length} agregar, -${descuento10Remove.length} quitar`);
       }
 
       // Early exit if nothing changed
-      if (inventoryItems.length === 0 && priceItems.length === 0 && collectionToAdd.length === 0 && collectionToRemove.length === 0) {
+      if (inventoryItems.length === 0 && priceItems.length === 0 &&
+          descuentosAdd.length === 0 && descuentosRemove.length === 0 &&
+          descuento10Add.length === 0 && descuento10Remove.length === 0) {
         logger.info(CTX, `${modeLabel} No real changes detected (stock, prices and collections match Wix) — nothing to update`);
         return;
       }
@@ -383,26 +417,38 @@ export class PriceInventorySyncTask extends BaseTask {
       })();
 
       // ── STEP 4c: Apply collection updates ────────────────────────────────
-      let colAddOk = 0; let colRemOk = 0; let colFail = 0;
-      if (descuento10Id) {
+      let colFail = 0;
+      let descuentosAddOk = 0; let descuentosRemOk = 0;
+      let descuento10AddOk = 0; let descuento10RemOk = 0;
+
+      const applyCol = async (colId: string | null, add: string[], rem: string[], name: string): Promise<void> => {
+        if (!colId) return;
         try {
-          if (collectionToAdd.length > 0) {
-            await addProductsToCollection(descuento10Id, collectionToAdd);
-            colAddOk = collectionToAdd.length;
-            logger.info(CTX, `Descuento10: agregados ${colAddOk} producto(s)`);
+          if (add.length > 0) {
+            await addProductsToCollection(colId, add);
+            logger.info(CTX, `${name}: agregados ${add.length} producto(s)`);
+            if (name === 'Descuentos') descuentosAddOk  = add.length;
+            else                      descuento10AddOk = add.length;
           }
-          if (collectionToRemove.length > 0) {
-            await removeProductsFromCollection(descuento10Id, collectionToRemove);
-            colRemOk = collectionToRemove.length;
-            logger.info(CTX, `Descuento10: removidos ${colRemOk} producto(s)`);
+          if (rem.length > 0) {
+            await removeProductsFromCollection(colId, rem);
+            logger.info(CTX, `${name}: removidos ${rem.length} producto(s)`);
+            if (name === 'Descuentos') descuentosRemOk  = rem.length;
+            else                      descuento10RemOk = rem.length;
           }
         } catch (err) {
           colFail++;
-          logger.error(CTX, `Error actualizando colección Descuento10: ${err instanceof Error ? err.message : String(err)}`);
+          logger.error(CTX, `Error actualizando colección ${name}: ${err instanceof Error ? err.message : String(err)}`);
         }
-      }
+      };
 
-      logger.info(CTX, `${modeLabel} Sync complete — Inventory: ${invOk} ok, ${invFail} failed (${blocked} blocked at 0) | Prices: ${priceOk} ok, ${priceFail} failed | Descuento10: +${colAddOk} -${colRemOk} ${colFail > 0 ? '(error)' : ''} | Skipped: ${skipped}`);
+      await applyCol(descuentosId,  descuentosAdd,  descuentosRemove,  'Descuentos');
+      await applyCol(descuento10Id, descuento10Add, descuento10Remove, 'Descuento10');
+
+      const colAddOk = descuentosAddOk + descuento10AddOk;
+      const colRemOk = descuentosRemOk + descuento10RemOk;
+
+      logger.info(CTX, `${modeLabel} Sync complete — Inventory: ${invOk} ok, ${invFail} failed (${blocked} blocked at 0) | Prices: ${priceOk} ok, ${priceFail} failed | Descuentos: +${descuentosAddOk} -${descuentosRemOk} | Descuento10: +${descuento10AddOk} -${descuento10RemOk} ${colFail > 0 ? '(error)' : ''} | Skipped: ${skipped}`);
 
       // ── STEP 5: Send email report ─────────────────────────────────────────
       if (!this.testLimit) {
