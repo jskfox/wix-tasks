@@ -109,7 +109,7 @@ export function startAdminServer(): void {
 
   // ── Auth middleware (skip login endpoint and static assets) ─────────────
   function authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction): void {
-    if (req.path === '/api/login' || req.path === '/') {
+    if (req.path === '/api/login' || req.path === '/api/health' || req.path === '/') {
       next();
       return;
     }
@@ -122,17 +122,67 @@ export function startAdminServer(): void {
   }
   app.use(authMiddleware);
 
+  // ── API: Health Check ────────────────────────────────────────────────────
+  app.get('/api/health', (_req, res) => {
+    res.json({
+      status: 'pass',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+    });
+  });
+
   // ── API: Login ───────────────────────────────────────────────────────────
+  const loginAttempts = new Map<string, { count: number, lockedUntil: number }>();
+  const MAX_ATTEMPTS = 3;
+  const LOCKOUT_MINUTES = 5;
+
   app.post('/api/login', (req, res) => {
+    const ip = req.ip || 'unknown';
+    const attempt = loginAttempts.get(ip);
+    
+    if (attempt && attempt.lockedUntil > Date.now()) {
+      const minutesLeft = Math.ceil((attempt.lockedUntil - Date.now()) / 60000);
+      logger.warn(CTX, `Login blocked for ${ip} (locked out for ${minutesLeft}m)`);
+      return res.status(429).json({ 
+        error: `Demasiados intentos fallidos. Intenta de nuevo en ${minutesLeft} minutos.`,
+        locked: true
+      });
+    }
+
     const { user, password } = req.body;
     if (user === ADMIN_USER && password === ADMIN_PASSWORD) {
+      // Reset attempts on success
+      loginAttempts.delete(ip);
+      
       const token = generateToken();
       activeSessions.add(token);
-      logger.info(CTX, `Admin login successful from ${req.ip}`);
+      logger.info(CTX, `Admin login successful from ${ip}`);
       res.json({ token });
     } else {
-      logger.warn(CTX, `Failed admin login attempt from ${req.ip}`);
-      res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+      // Track failed attempt
+      const currentCount = attempt ? attempt.count + 1 : 1;
+      
+      if (currentCount >= MAX_ATTEMPTS) {
+        loginAttempts.set(ip, { 
+          count: currentCount, 
+          lockedUntil: Date.now() + LOCKOUT_MINUTES * 60000 
+        });
+        logger.warn(CTX, `Failed admin login from ${ip} (Max attempts reached, locked out for ${LOCKOUT_MINUTES}m)`);
+        res.status(401).json({ 
+          error: `Contraseña o usuario incorrectos. Tu IP ha sido bloqueada por ${LOCKOUT_MINUTES} minutos.`,
+          locked: true
+        });
+      } else {
+        loginAttempts.set(ip, { 
+          count: currentCount, 
+          lockedUntil: 0 
+        });
+        const attemptsLeft = MAX_ATTEMPTS - currentCount;
+        logger.warn(CTX, `Failed admin login from ${ip} (${attemptsLeft} attempts left)`);
+        res.status(401).json({ 
+          error: `Usuario o contraseña incorrectos. Te quedan ${attemptsLeft} intento(s) antes del bloqueo.` 
+        });
+      }
     }
   });
 

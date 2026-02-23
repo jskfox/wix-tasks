@@ -170,7 +170,7 @@ FROM LDCOM_PROCONSA.dbo.Articulo_Equivalente AS ae WITH (NOLOCK);
 
 export class ErpPostgresSyncTask extends BaseTask {
   readonly name = 'erp-postgres-sync';
-  readonly description = 'Sincroniza precios y existencias desde ERP (MSSQL) hacia PostgreSQL. Incluye análisis de cambios de precios y notificación por email.';
+  readonly description = 'Sincroniza precios y existencias desde ERP (MSSQL) hacia PostgreSQL. Incluye análisis de cambios de precios y notificación por email. Clave para: Pricechecker, ecommerce Wix';
   // Every 30 minutes from 6am to 9pm Pacific
   readonly cronExpression = '*/30 6-21 * * *';
 
